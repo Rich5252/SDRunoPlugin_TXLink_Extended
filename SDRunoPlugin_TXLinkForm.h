@@ -65,6 +65,7 @@ public:
 	long	FT8txDelayMillis = 250;
 	string	strTXtemp = "";
 	bool	bRITchkbox = false;
+	bool	bOFSchkbox = false;
 
 	enum eSplitMode {
 		SplitNone,			//same RxTx, both vrx0 & vrx1 track same freq, only vrx0 changes freq
@@ -117,6 +118,7 @@ private:
 	void SetRXFreq();
 	void SwapTxRxFreq();
 	bool GetRITchkbox();
+	bool GetOFSchkbox();
 	void FixFreqBtnClicked();
 	void AtuBtnClicked();
 	void DXspotBtnClicked();
@@ -149,6 +151,8 @@ private:
 	string	GetPAlevel();
 	string	GetRIT();
 	void	SetRIT(string strRIT);
+	string	GetOFS();
+	void	SetOFS(string strOFS);
 	void	SaveSplitMode();
 	long	millisToEnd();					//calc FT8 millis to end of tx period
 
@@ -164,8 +168,10 @@ private:
 	void SaveTXlevel(string strTXlevel);
 	void SavePAlevel(string strPAlevel);
 	string LoadRIT();
+	string LoadOFS();
 	void LoadSplitMode();
 	void SaveRIT(string strRIT);
+	void SaveOFS(string strOFS);
 	void SetStandbyModeClicked();
 
 	void SetTXtemp(string strTemp);
@@ -209,7 +215,8 @@ private:
 	nana::button FixTXupBtn{ *this, nana::rectangle(75, 65,50,20) };
 	nana::button ResetRXFreqBtn{ *this, nana::rectangle(130, 65, 50, 20) };
 	nana::button SwapTxRxBtn{ *this, nana::rectangle(185, 65, 50, 20) };
-	nana::checkbox RITchkbox{ *this, nana::rectangle(240, 68, 50, 20) };
+	nana::checkbox RITchkbox{ *this, nana::rectangle(240, 61, 50, 20) };
+	nana::checkbox OFSchkbox{ *this, nana::rectangle(240, 75, 50, 20) };
 	nana::textbox COMportTb{ *this, nana::rectangle(20, 95, 50, 20) };
 	nana::button StandbyBtn{ *this, nana::rectangle(110, 95, 80, 20) };
 	nana::checkbox MuteTXchkbox{ *this, nana::rectangle(205, 98, 70, 20) };

@@ -143,6 +143,7 @@ void SDRunoPlugin_TXLinkUi::HandleEvent(const UnoEvent& ev)
 	static bool bBusy = 0;
 	static double lastF0 = 0;
 	static double lastF1 = 0;
+	static double OFStxFreq = 0;
 
 	switch (ev.GetType())
 	{
@@ -164,6 +165,9 @@ void SDRunoPlugin_TXLinkUi::HandleEvent(const UnoEvent& ev)
 		freq1 = m_controller.GetVfoFrequency(1);
 		bF1changed = false;
 		if ((uint32_t)freq1 != (uint32_t)lastF1) { bF1changed = true; lastF1 = freq1; }
+
+		if (!m_form->bOFSchkbox) OFStxFreq = 0;									//if OFS disabled then reset to 0 so no offset applied			
+		if (m_form->bOFSchkbox && bF1changed) { OFStxFreq = freq1 - freq0; }	//tx OFS changes when F1 (TX) freq changes
 
 		std::cout << "F Event " << (uint32_t)freq0 << " " << (uint32_t)freq1 << " "  << m_form->SplitMode << std::endl;
 
@@ -188,7 +192,7 @@ void SDRunoPlugin_TXLinkUi::HandleEvent(const UnoEvent& ev)
 		else if (m_form->SplitMode == m_form->SplitNone && bF0changed)
 		{
 			m_form->SendSerialMsg("$SendRXfreq$");			// special Msg to execute SendRXfrq()
-											// and it sends TX
+															// which sends to TX
 		}
 		else if (m_form->SplitMode == m_form->SplitFT8)
 		{
@@ -203,10 +207,17 @@ void SDRunoPlugin_TXLinkUi::HandleEvent(const UnoEvent& ev)
 		{
 			//split TX freq so update TX with VRX1 if changed (unless in FT8 mode when no change)
 			//double freq = m_controller.GetVfoFrequency(1);
-			if (freq1 != m_form->CurrentTXfreq && freq1 > 0 && m_form->SplitMode != m_form->SplitFT8)			// freq is 0 if vrx1 not installed
+			if (freq1 > 0 && m_form->SplitMode != m_form->SplitFT8)			// freq is 0 if vrx1 not installed
 			{
-				m_form->CurrentTXfreq = freq1;						//TX is set by vrx1
-				m_form->SendSerialMsg("$SendTXfreq$");			// special Msg to execute SendTXfrq(). only update TX frq in this case
+				if (m_form->bOFSchkbox) {		//if OFS enabled then apply offset to vrx1 freq to get tx freq
+					freq1 = freq0 + OFStxFreq;
+					m_controller.SetVfoFrequency(1, freq1);
+				}
+				if (freq1 != m_form->CurrentTXfreq)
+				{
+					m_form->CurrentTXfreq = freq1;							//TX is set by vrx1
+					m_form->SendSerialMsg("$SendTXfreq$");					// special Msg to execute SendTXfrq(). only update TX frq in this case
+				}
 			}
 		}
 		bBusy = false;

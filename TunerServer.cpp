@@ -86,7 +86,7 @@ void Tuner_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _
 					EncoderSteps = 0;	//reset encoder steps
 					FreqIncr = 0;	//reset frequency increment
 				}
-				//if FT4/8 split count up 1 revolution (800 steps) and send CTRL SHFT F11 or F12 to WSTJTX to change TX frequency by 1kHz
+				//if FT4/8 split count up 1 revolution (400 steps) and send CTRL SHFT F11 or F12 to WSTJTX to change TX frequency by 1kHz
 				if (EncoderSteps > 400)
 				{
 					//double Freq = _controller.GetVfoFrequency(0);

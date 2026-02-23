@@ -386,6 +386,11 @@ void SDRunoPlugin_TXLinkForm::Setup()
 	RITchkbox.caption("RIT");
 	RITchkbox.check(LoadRIT() == "true");
 
+	OFSchkbox.fgcolor(nana::color_rgb(forecolor));
+	OFSchkbox.transparent(true);
+	OFSchkbox.caption("OFS");
+	OFSchkbox.check(LoadOFS() == "true");
+
 	StandbyBtn.caption("Set TX on");
 	StandbyBtn.edge_effects(true);
 	StandbyBtn.events().click([&]
@@ -597,6 +602,17 @@ void SDRunoPlugin_TXLinkForm::SetRIT(string RIT)
 	RITchkbox.check(RIT == "true");
 }
 
+string SDRunoPlugin_TXLinkForm::GetOFS()
+{
+	string ret = OFSchkbox.checked() ? "true" : "false";
+	return ret;
+}
+
+void SDRunoPlugin_TXLinkForm::SetOFS(string RIT)
+{
+	OFSchkbox.check(RIT == "true");
+}
+
 void SDRunoPlugin_TXLinkForm::SetStandbyMode(bool Mode)
 {
 	bool is_sent = false;
@@ -675,6 +691,7 @@ void SDRunoPlugin_TXLinkForm::OnTimer()
 	//freqTb.caption(strTXfreq);
 
 	bRITchkbox = RITchkbox.checked();		//get RIT checkbox state
+	bOFSchkbox = OFSchkbox.checked();
 
 	ProcessMessageQueue();					//process any external messages in the queue
 
@@ -1732,6 +1749,11 @@ bool SDRunoPlugin_TXLinkForm::GetRITchkbox()
 	return RITchkbox.checked();
 }
 
+bool SDRunoPlugin_TXLinkForm::GetOFSchkbox()
+{
+	return OFSchkbox.checked();
+}
+
 void SDRunoPlugin_TXLinkForm::SettingsButton_Click()
 {
 	//Create a new settings dialog object
@@ -1901,9 +1923,25 @@ string SDRunoPlugin_TXLinkForm::LoadRIT()
 	return tmp;
 }
 
+string SDRunoPlugin_TXLinkForm::LoadOFS()
+{
+	std::string tmp = "";
+	m_controller.GetConfigurationKey("TXLink.OFS", tmp);
+	if (tmp.empty())
+	{
+		return "false";
+	}
+	return tmp;
+}
+
 void SDRunoPlugin_TXLinkForm::SaveRIT(string strRIT)
 {
 	m_controller.SetConfigurationKey("TXLink.RIT", strRIT);
+}
+
+void SDRunoPlugin_TXLinkForm::SaveOFS(string strOFS)
+{
+	m_controller.SetConfigurationKey("TXLink.OFS", strOFS);
 }
 
 void SDRunoPlugin_TXLinkForm::LoadSplitMode()
@@ -1974,6 +2012,7 @@ void SDRunoPlugin_TXLinkForm::SaveIniData()
 	SaveTXlevel(GetTXlevel());
 	SavePAlevel(GetPAlevel());
 	SaveRIT(GetRIT());
+	SaveOFS(GetOFS());
 	SaveSplitMode();
 	//*/
 	std::cout << get_millis() << " SDRunoPlugin_TXLinkUi::SaveIniData complete" << std::endl;
