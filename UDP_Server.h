@@ -21,7 +21,7 @@ extern std::atomic <bool> UDPevent;				//new status update
 extern std::mutex UDPEvent_mtx;					// Declare a mutex
 
 extern bool UDPHaltTXevent;
-extern std::string WSJTX_TXmodeStr;			//"FT8", "FT4"
+extern std::string WSJTX_TXmodeStr;			//"FT8", "FT4", "FT2"
 extern bool TXmodeChange;
 extern bool TXflg;
 extern int TXDF;

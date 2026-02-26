@@ -63,6 +63,11 @@ std::string FT4TXsymbols = "0013210331123303132103201221102101102322201030323123
 std::string FT4TxNoSymbols = "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
 std::string strFT4WSJTXpath = "C:\\WSJT\\wsjtx\\bin\\ft4code.exe";         // must use double \\ (or /). This is emcapsulated in "" so can have spaces.
 
+std::string FT2TXsymbols = "001321033112330313210320122110210110232220103032312323100312203003023102222320131323332231310212123032010";     //"NOCALL"
+std::string FT2TxNoSymbols = "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+std::string strFT2WSJTXpath = "C:\\WSJT\\wsjtx\\bin\\ft4code.exe";         // must use double \\ (or /). This is emcapsulated in "" so can have spaces.
+
+
 std::string TXsymbols = "3140652002457262353553516142250015633140652505007562410457700470324420543140652";       //"NOCALL" default
 std::string TxNoSymbols = FT8TxNoSymbols;                                           //default in case of error or unsupported modes
 std::string strWSJTXpath = "C:\\WSJT\\wsjtx\\bin\\ft8code.exe";
@@ -536,6 +541,7 @@ std::string EncodeMessage(const std::string& WSJTX_TXmodeStr, const std::string&
 
     const std::string ft8Path = strFT8WSJTXpath;
     const std::string ft4Path = strFT4WSJTXpath;
+    const std::string ft2Path = strFT2WSJTXpath;
 
     std::string symbols;
     size_t requiredLength = 0;
@@ -546,6 +552,10 @@ std::string EncodeMessage(const std::string& WSJTX_TXmodeStr, const std::string&
     }
     else if (WSJTX_TXmodeStr == "FT4") {
         symbols = FT4TxNoSymbols;
+        requiredLength = 105;
+    }
+    else if (WSJTX_TXmodeStr == "FT2") {
+        symbols = FT2TxNoSymbols;
         requiredLength = 105;
     }
     else {
@@ -565,6 +575,9 @@ std::string EncodeMessage(const std::string& WSJTX_TXmodeStr, const std::string&
     }
     else if (WSJTX_TXmodeStr == "FT4") {
         command = L"\"" + std::wstring(ft4Path.begin(), ft4Path.end()) + L"\"";
+    }
+    else if (WSJTX_TXmodeStr == "FT2") {
+        command = L"\"" + std::wstring(ft2Path.begin(), ft2Path.end()) + L"\"";
     }
     command += L" \"" + std::wstring(strMessage.begin(), strMessage.end()) + L"\"";
 
@@ -641,7 +654,7 @@ std::string EncodeMessage(const std::string& WSJTX_TXmodeStr, const std::string&
                 return TxNoSymbols;
             }
         }
-        if ((WSJTX_TXmodeStr == "FT8" && lineCount == 16) || (WSJTX_TXmodeStr == "FT4" && lineCount == 22)) {
+        if ((WSJTX_TXmodeStr == "FT8" && lineCount == 16) || ((WSJTX_TXmodeStr == "FT2" || WSJTX_TXmodeStr == "FT4") && lineCount == 22)) {
             symbols = line;
             break;
         }

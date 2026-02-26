@@ -41,6 +41,7 @@
 #define formHeight (240)
 
 #define FilterBandwidthCW 500
+#define FilterBandwidthFT2 3000
 #define FilterBandwidthFT4 3000
 #define FilterBandwidthFT8 3000
 

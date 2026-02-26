@@ -926,6 +926,7 @@ void SDRunoPlugin_TXLinkForm::ProcessUDPEvent()
 				//refresh TX data and enable TX as required
 				str = "{M8}";
 				if (WSJTX_TXmodeStr == "FT4") { str = "{M4}"; }
+				if (WSJTX_TXmodeStr == "FT2") { str = "{M2}"; }
 				is_sent = Serial.WriteSerialPort(str);
 
 				str = "{Y" + to_string(TXDF) + "}";
@@ -971,7 +972,7 @@ void SDRunoPlugin_TXLinkForm::ProcessUDPEvent()
 
 			//send TX last so freq & message updated first in Arduino
 			is_sent = true;
-			if (SplitMode == SplitFT8 && (DigiTXmodeStr == "FT4" || DigiTXmodeStr == "FT8")) { is_sent = Serial.WriteSerialPort(str); }
+			if (SplitMode == SplitFT8 && (DigiTXmodeStr == "FT2" || DigiTXmodeStr == "FT4" || DigiTXmodeStr == "FT8")) { is_sent = Serial.WriteSerialPort(str); }
 
 		}
 		//if (is_sent) { UDPevent = false; }
@@ -1038,6 +1039,7 @@ void SDRunoPlugin_TXLinkForm::SetupDataMode()
 	{
 		int bndw = FilterBandwidthFT8;
 		if (DigiTXmodeStr == "FT4") { bndw = FilterBandwidthFT4; }
+		if (DigiTXmodeStr == "FT2") { bndw = FilterBandwidthFT2; }
 		m_controller.SetFilterBandwidth(0, bndw);
 		TXmodeChange = false;
 	}
@@ -1805,6 +1807,7 @@ long SDRunoPlugin_TXLinkForm::millisToEnd() {
 
 	long millisToEnd = (59999 - millisecondsInMinute.count()) % 15000 - 170;			//remaining millisecs in 15 sec slot
 	if (WSJTX_TXmodeStr == "FT4") { millisToEnd = (59999 - millisecondsInMinute.count()) % 7500 - 50; }   //7.5sec slot
+	if (WSJTX_TXmodeStr == "FT2") { millisToEnd = (59999 - millisecondsInMinute.count()) % 3750 - 25; }   //3.75sec slot
 
 	//TXtempLbl.caption(to_string(millisToEnd));
 

@@ -26,6 +26,9 @@ INPUT CreateKeyInput(WORD vk, DWORD flags) {
 HWND Find_WSJTX_Window() {
     HWND target = FindTargetWindow(L"WSJT-X   v2.7.0   by K1JT et al.", true);
     if (!target) {
+        target = FindTargetWindow(L"WSJT-X   v3.1.0  improved PLUS edition", true);
+    }
+    if (!target) {
         target = FindTargetWindow(L"WSJT-X   v3.0.0  improved PLUS edition", true);
     }
     if (!target) {
