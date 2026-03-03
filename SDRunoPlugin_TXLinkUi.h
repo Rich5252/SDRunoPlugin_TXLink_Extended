@@ -23,7 +23,7 @@ nana::detail::bedrock& get_bedrock_instance();
 #include "SDRunoPlugin_TXLinkForm.h"
 #include "UDP_Server.h"
 
-
+#define WM_UDP_DATA_READY (WM_USER + 1)
 
 // Forward reference
 class SDRunoPlugin_TXLink;
@@ -56,6 +56,8 @@ public:
 		return m_exitPromise.get_future();
 	}
 	std::promise<void> m_exitPromise;
+
+	void PostUDPevent();
 
 private:
 	

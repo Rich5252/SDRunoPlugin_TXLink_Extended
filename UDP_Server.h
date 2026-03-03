@@ -6,11 +6,12 @@
 #include <atomic>
 #include "MessageBox.h"
 #include "MessageQueue.h"
+#include "SDRunoPlugin_TXLink.h"
 
 #include "UDP_Type17.h"
 
 std::string ProcessPacket(char * message, int message_len);
-void UDP_Server();
+void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _parent);
 LPWSTR ConvertToLPWSTR(const char* charString);
 std::string EncodeMessage(const std::string& WSJTX_TXmodeStr, const std::string& strMessage);
 std::string removeTrailingSpaces(std::string str);
@@ -36,6 +37,7 @@ extern std::string strLocator;
 extern uint64_t curTX
 ;		//set from form
 extern uint64_t newFrequency;		// non zero if it has just changed
+extern bool dataChanged;			//set when new data received from wsjtx to trigger form update
 extern std::string strReport;
 extern uint32_t RxDF;
 

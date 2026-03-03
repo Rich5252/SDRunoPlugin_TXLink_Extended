@@ -147,6 +147,7 @@
     <ClCompile Include="nana_cleanup.cpp" />
     <ClCompile Include="RTTY_Server.cpp" />
     <ClCompile Include="FindWindowTitleRoot.cpp" />
+    <ClCompile Include="RealTimeClock_Utils.cpp" />
     <ClCompile Include="UDP_Type17.cpp" />
     <ClCompile Include="TunerServer.cpp" />
     <ClCompile Include="UDP_Server.cpp" />
@@ -156,6 +157,7 @@
     <ClInclude Include="DXspiderClient.h" />
     <ClInclude Include="FindWindowTitleRoot.h" />
     <ClInclude Include="Console.h" />
+    <ClInclude Include="RealTimeClock_Utils.h" />
     <ClInclude Include="UDP_Type17.h" />
     <ClInclude Include="MessageQueue.h" />
     <ClInclude Include="NamedPipeServer.h" />

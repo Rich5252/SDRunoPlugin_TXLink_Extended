@@ -1,6 +1,7 @@
 //#include "stdafx.h"
 #include "SimpleSerial.h"
 #include "MessageBox.h"
+#include "RealTimeClock_Utils.h"
 
 SimpleSerial::SimpleSerial(const std::string com_port, DWORD COM_BAUD_RATE, bool bAsync)
 {
@@ -211,7 +212,7 @@ bool SimpleSerial::WriteSerialPort(std::string data_sent)
 	}
 	else
 	{
-		std::cout << get_millis() << "SimpleSerial::WriteSetialPort() Write success: " << data_sent << "  PreBufQ = " << status_.cbOutQue <<std::endl;
+		std::cout << get_millis() << "SimpleSerial::WriteSetialPort() Write success: " << data_sent << "  PreBufQ = " << status_.cbOutQue << " DT: " << GetCurrentTimeMs() % 3750 << std::endl;
 		return true;
 	}
 }

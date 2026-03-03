@@ -16,6 +16,8 @@
 #include "WSJTX_Packet.h"
 #include "UDP_Server.h"
 #include "MessageQueue.h"
+#include "RealTimeClock_Utils.h"
+
 
 
 #define debugUDP
@@ -53,6 +55,7 @@ std::string strDecodeMsg = "NOCALL";
 uint64_t curFrequency = 0;                  //local store
 uint64_t curTXFrequency = 0;                  //from form
 uint64_t newFrequency = 0;                  // non zero ifchanged (extern)
+bool dataChanged = false;                        //set when new data received from wsjtx to trigger form update
 
 std::string FT8TXsymbols = "3140652002457262353553516142250015633140652505007562410457700470324420543140652";       //"NOCALL"
 std::string FT8TxNoSymbols = "0000000000000000000000000000000000000000000000000000000000000000000000000000000";
@@ -80,6 +83,8 @@ std::mutex m_lock2;
 LPWSTR ConvertToLPWSTR(const char* charString);
 SOCKET server_socket;
 
+SDRunoPlugin_TXLink* m_parent = nullptr;
+
 void dump_packet_hex(const std::vector<uint8_t>& packet) {
     std::stringstream ss;
     ss << std::hex << std::uppercase;
@@ -97,8 +102,10 @@ void dump_packet_hex(const std::vector<uint8_t>& packet) {
 //wsjtx UDP datagram server with parser and ft8 encoding using wsjtx ft8code.exe utility
 //this server is invoked into a seperate thread from the TXlink plugin for SDRuno app.
 // status update to the plugin is via the simple extern data values above.
-void UDP_Server()
+void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _parent)
 {
+	m_parent = &_parent;    // Set the global reference to the parent plugin instance
+
     sockaddr_in server{}, client{};
 
     // initialise winsock
@@ -125,9 +132,10 @@ void UDP_Server()
     server.sin_port = htons(PORT);
 
     // bind
-    if (bind(server_socket, (sockaddr*)&server, sizeof(server)) == SOCKET_ERROR)
+    if (::bind(server_socket, (sockaddr*)&server, sizeof(server)) == SOCKET_ERROR)
     {
-        std::cout << get_millis() << "Bind failed with error code: " << WSAGetLastError() << std::endl;
+        int errorCode = WSAGetLastError();
+        std::cout << get_millis() << "Bind failed with error code: " << errorCode << std::endl;
         exit(EXIT_FAILURE);
     }
     std::cout << get_millis() << "Bind done." << std::endl;
@@ -201,7 +209,7 @@ void UDP_Server()
 #endif
             waitCount = 0; // Reset wait count on successful receive
 			std::string strPacketType = ProcessPacket(message, message_len);
-			std::cout << get_millis() << "UDP packet : " << strPacketType << std::endl;
+			std::cout << get_millis() << "UDP packet : " << strPacketType << " " << FormatUtcTime(GetCurrentTimeMs()) << std::endl;
         }
 
         // OUTGOING MESSAGES
@@ -251,7 +259,7 @@ std::string ProcessPacket(char * message, int message_len)
 #endif
 
     if (NewPacket.PacketType == 0) {
-        return "Heartbeat";
+        return "Heartbeat " + FormatUtcTime(GetCurrentTimeMs());
         WSJTX_Heartbeat HeartbeatPacket(pkt, NewPacket.index);
         HeartbeatPacket.Decode();
         // emit UI update signal for heartbeat if needed
@@ -270,6 +278,7 @@ std::string ProcessPacket(char * message, int message_len)
         //status packet contains next ft8 message and TX on/off updates
         WSJTX_Status StatusPacket( pkt, NewPacket.index);
         StatusPacket.Decode();
+
         //std::cout << "Status decode. Frequency = " << StatusPacket.Frequency << " Mode = " << StatusPacket.Mode << " TxEnabled = " << StatusPacket.TxEnabled << std::endl;
 
         std::string msg = StatusPacket.DefaultTXMessage;
@@ -286,20 +295,24 @@ std::string ProcessPacket(char * message, int message_len)
 			if (UDPExitRequest) { return "UDP_Server: UDPExitRequest"; } // exit if requested
         } 
         if (sleeps > 0) { std::cout << get_millis() << " UDP event wait: " << sleeps << " times" << std::endl; }
-        
+       
+        dataChanged = false;   //reset data changed flag - set to true if any data changes below
         if (StatusPacket.Frequency != curFrequency && newFrequency == 0)
         {
             newFrequency = StatusPacket.Frequency;
             curFrequency = newFrequency;                //reset to zero in form when UDPevent detected
+			dataChanged = true;
         }
-        if (WSJTX_TXmodeStr != StatusPacket.Mode) { TXmodeChange = true; }
+        if (WSJTX_TXmodeStr != StatusPacket.Mode) { TXmodeChange = true; dataChanged = true; }
         WSJTX_TXmodeStr = StatusPacket.Mode;
         if (TXflg && !StatusPacket.Transmitting && !StatusPacket.TxEnabled) { UDPHaltTXevent = true; }
-        TXflg = StatusPacket.Transmitting;  //transmit on/off
+		TXflg = StatusPacket.Transmitting;  //transmit on/off
+		if (TXDF != StatusPacket.TxDF) { dataChanged = true; }
         TXDF = StatusPacket.TxDF;           //transmit freq offset added to set TX freq
         if (LastTXmsg == "" || LastTXmsg != msg)
         {
             TXsymbols = EncodeMessage(WSJTX_TXmodeStr, msg);         //list of tones to transmit
+			dataChanged = true;
         }
         else
         {
@@ -312,13 +325,15 @@ std::string ProcessPacket(char * message, int message_len)
 		strReport = StatusPacket.Report;    //report to send
 		RxDF = StatusPacket.RxDF;       //receive freq offset
         UDPevent = true;                    //flag for main UDP server code to update Arduino
+        //m_parent->m_Ui->m_form->udp_poller.start();         //didnt trigger - trigger 0ms timer to cause update event in Form thread
+																//probably because different thread
         return ret;
     }
     else if (NewPacket.PacketType == 2) {
         WSJTX_Decode DecodePacket(pkt, NewPacket.index);
         DecodePacket.Decode();
         // Process DecodePacket and emit UI update signal
-        return "Decode: " + DecodePacket.Message;
+        return "Decode: " + DecodePacket.Message + "  DT: " + to_string(DecodePacket.DeltaTime);
     }
     else if (NewPacket.PacketType == 3) {
         return "Erase";

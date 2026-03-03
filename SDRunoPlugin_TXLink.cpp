@@ -18,7 +18,7 @@
 //
 //DLL is entry point for SDRuno app. TXLinkProject.cpp contains CreatePlugin function which returns the new TXLink object.
 // Classes: TXLink calls TXLinkUi calls TXLinkForm which inherits Nano::form
-//			TXLink calls UDP_Server & TunerServer both in separate threads
+//			TXLink calls UDP_Server_Loop & TunerServer both in separate threads
 
 SDRunoPlugin_TXLink::SDRunoPlugin_TXLink(IUnoPluginController& controller) :
 	IUnoPlugin(controller),
@@ -144,7 +144,13 @@ void SDRunoPlugin_TXLink::StartTXLinkUi()
 
 	// Initialize UDPthread here if needed, using the same reset() pattern:
 	if (!UDPthread) {
-	    UDPthread.reset(new std::thread(UDP_Server));
+		UDPthread.reset(
+			new std::thread([this, &controller = SDRunoPlugin_TXLink::m_controller]() {
+
+				// Pass the queue member (by reference) directly to the server loop function
+				UDP_Server_Loop(controller, *this);
+				})
+		);
 	}
 
 	StartAnnotator();

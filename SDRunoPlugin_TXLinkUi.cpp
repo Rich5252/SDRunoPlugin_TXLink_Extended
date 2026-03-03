@@ -90,7 +90,7 @@ void SDRunoPlugin_TXLinkUi::ShutdownFormThread()
 void SDRunoPlugin_TXLinkUi::RunForm()
 {
 	std::cout << get_millis() << " SDRunoPlugin_TXLinkUi::RunForm thread started" << std::endl;
-	//get defaults for wsjtx UDP_Server and enable that to run
+	//get defaults for wsjtx UDP_Server_Loop and enable that to run
 	std::string wsjtxPath;
 	m_controller.GetConfigurationKey("TXLink.wsjtxPath", wsjtxPath);
 	if (wsjtxPath.empty())
@@ -116,6 +116,11 @@ void SDRunoPlugin_TXLinkUi::RunForm()
 	}
 }
 
+void SDRunoPlugin_TXLinkUi::PostUDPevent()
+{
+	HWND native_hwnd = (HWND)nana::API::root(m_form->handle());
+	::PostMessage(native_hwnd, WM_UDP_DATA_READY, 0, 0);
+}
 
 void SDRunoPlugin_TXLinkUi::_updateTX_AnnoEntry(std::string tag, std::string tim, long long freq)
 {

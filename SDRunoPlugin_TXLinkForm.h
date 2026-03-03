@@ -29,6 +29,7 @@
 #include "MessageBox.h"
 #include "NamedPipeServer.h"
 #include "MessageQueue.h"
+#include "RealTimeClock_Utils.h"
 
 
 // Shouldn't need to change these
@@ -84,6 +85,7 @@ public:
 	
 	bool SendSerialMsg(const std::string& msg);			//thread safe way of sending messages from other processes or threads
 	
+	nana::timer udp_poller;
 
 private:
 	const std::string com_port = "\\\\.\\COM5";
@@ -100,6 +102,7 @@ private:
 	void CheckWindowState();
 	void ProcessIncomingSerial();
 	void ProcessUDPEvent();
+	void ReTransmit();
 	std::string ProcessRTTYcommand(std::string rttyCmdText);
 
 	void StartTimer()
@@ -240,6 +243,7 @@ private:
 	nana::label SWRSWRlbl{ *this, nana::rectangle(179, 205, 30, 20) };
 	nana::label SWRSWRtxt{ *this, nana::rectangle(219, 202, 30, 20) };
 	nana::button AtuBtn{ *this, nana::rectangle(259, 202, 20, 20) };
+
 	double m_timerCount;
 
 	std::unique_ptr<SDRunoPlugin_TemplateATUDialog> m_atuDialog;
@@ -249,7 +253,6 @@ private:
 	#define nCalls 10
 	string strLastTenCalls[nCalls];
 	int nLastCall;									//last call index
-
 
 	SDRunoPlugin_TXLinkUi & m_parent;
 	IUnoPluginController & m_controller;
