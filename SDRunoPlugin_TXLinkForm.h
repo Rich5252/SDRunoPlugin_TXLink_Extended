@@ -105,6 +105,8 @@ private:
 	void ReTransmit();
 	std::string ProcessRTTYcommand(std::string rttyCmdText);
 
+	bool DiagnosticTX = false;
+
 	void StartTimer()
 	{
 		m_timerCount = 0.0;

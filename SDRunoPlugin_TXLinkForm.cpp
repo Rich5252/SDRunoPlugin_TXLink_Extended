@@ -845,8 +845,11 @@ void SDRunoPlugin_TXLinkForm::ProcessIncomingSerial()
 			{
 				VRX0mute = m_controller.GetAudioMute(0);
 				VRX1mute = m_controller.GetAudioMute(1);
-				//m_controller.SetAudioMute(0, true);
-				//m_controller.SetAudioMute(1, true);
+				if (!DiagnosticTX) {				
+					m_controller.SetAudioMute(0, true);
+					m_controller.SetAudioMute(1, true);
+					DiagnosticTX = false;
+				}
 			}
 			else if (NewMsg.substr(0, 1) == "N")
 			{
@@ -1042,6 +1045,7 @@ void SDRunoPlugin_TXLinkForm::ReTransmit() {
 	long TimeToEnd = millisToEnd();
 	std::string str = "{W" + to_string(TimeToEnd) + "}{X1}";
 	Serial.WriteSerialPort(str);
+	DiagnosticTX = true;				//controls mute
 }
 
 void SDRunoPlugin_TXLinkForm::SetupDataMode()
