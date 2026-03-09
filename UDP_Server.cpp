@@ -209,7 +209,8 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
 #endif
             waitCount = 0; // Reset wait count on successful receive
 			std::string strPacketType = ProcessPacket(message, message_len);
-			std::cout << get_millis() << "UDP packet : " << strPacketType << " " << FormatUtcTime(GetCurrentTimeMs()) << std::endl;
+			uint64_t ms = GetCurrentTimeMs();
+			std::cout << get_millis() << "UDP packet : " << strPacketType << " " << FormatUtcTime(ms) << " DTC: " << ms % 3750 << std::endl;
         }
 
         // OUTGOING MESSAGES

@@ -848,8 +848,8 @@ void SDRunoPlugin_TXLinkForm::ProcessIncomingSerial()
 				if (!DiagnosticTX) {				
 					m_controller.SetAudioMute(0, true);
 					m_controller.SetAudioMute(1, true);
-					DiagnosticTX = false;
 				}
+				DiagnosticTX = false;
 			}
 			else if (NewMsg.substr(0, 1) == "N")
 			{
@@ -1845,7 +1845,7 @@ long SDRunoPlugin_TXLinkForm::millisToEnd() {
 
 	long millisToEnd = (59999 - millisecondsInMinute.count()) % 15000 - 170;			//remaining millisecs in 15 sec slot
 	if (WSJTX_TXmodeStr == "FT4") { millisToEnd = (59999 - millisecondsInMinute.count()) % 7500 - 50; }   //7.5sec slot
-	if (WSJTX_TXmodeStr == "FT2") { millisToEnd = (59999 - millisecondsInMinute.count()) % 3750 - 10; }   //3.75sec slot
+	if (WSJTX_TXmodeStr == "FT2") { millisToEnd = (59999 - millisecondsInMinute.count()) % 3750 - 150; }   //3.75sec slot
 
 	//TXtempLbl.caption(to_string(millisToEnd));
 
