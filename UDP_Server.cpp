@@ -152,10 +152,6 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
 	int waitCount = 0;
     while (!UDPExitRequest)
     {
-#ifdef debugUDP
-        //if (waitCount == 0) { std::cout << std::endl << "Waiting for data... " << waitCount << std::endl; }
-#endif
-        //fflush(stdout);
         char message[BUFLEN] = {};
 
         // try to receive some data, this is a blocking call
@@ -171,11 +167,11 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
             {
                 // This is the expected timeout error, just continue the loop
                 // to check UDPExitRequest. No message was received.
-#ifdef debugUDP
+
 				if (waitCount == 0) { std::cout << std::endl << "UDP waiting : "; }
                 std::cout << " " << ++waitCount;
                 //if ((++waitCount % 5) == 0) { std::cout << " " << waitCount; }
-#endif
+
                 continue; // Go back to the top of the loop to check UDPExitRequest
             }
             else
@@ -203,41 +199,12 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
                 break; // Exit the loop if exit request is set
 			}
 
-#ifdef debugUDPx
-            std::cout << std::endl << get_millis() << "Received packet from " << inet_ntoa(client.sin_addr) << " " << ntohs(client.sin_port) << "Len: " << message_len << std::endl;
-			
-#endif
-            waitCount = 0; // Reset wait count on successful receive
+            waitCount = 0;                              // Reset wait count on successful receive
 			std::string strPacketType = ProcessPacket(message, message_len);
 			uint64_t ms = GetCurrentTimeMs();
 			std::cout << get_millis() << "UDP packet : " << strPacketType << " " << FormatUtcTime(ms) << " DTC: " << ms % 3750 << std::endl;
         }
 
-        // OUTGOING MESSAGES
-        // --- 2. Check internal queue and send any pending messages ---
-        while (!WSJTX_UDPOutQ.empty()) {
-            uint64_t dialFrequencyHz = WSJTX_UDPOutQ.waitAndPop();
-            if (!dialFrequencyHz == 0) {
-                std::cout << get_millis() << " UDP Server sending message to WSJT-X. Freq = : " << dialFrequencyHz << std::endl;
-                sendSetFreqCommand(                                 // Example: Set 14.074 MHz FT8, TX Odd
-                    server_socket,
-                    "MyClientApp",
-                    dialFrequencyHz,
-                    true,
-                    "FT8",
-                    2500,
-                    "",
-                    false,
-                    15,
-                    1500,
-                    1500,
-                    "DX_CALL",
-                    "GRID",
-                    true,
-                    false // TX Odd (Direction = 0)
-                );
-             }
-        }
 	}                   //loop until UDPExitRequest is set
 
 	// Cleanup
@@ -260,21 +227,13 @@ std::string ProcessPacket(char * message, int message_len)
 #endif
 
     if (NewPacket.PacketType == 0) {
-        return "Heartbeat " + FormatUtcTime(GetCurrentTimeMs());
+        return "Heartbeat ";
         WSJTX_Heartbeat HeartbeatPacket(pkt, NewPacket.index);
         HeartbeatPacket.Decode();
         // emit UI update signal for heartbeat if needed
     }
     else if (NewPacket.PacketType == 1) {
 		std::string ret = "Status";
-
-        //std::cout << "Status Packet DUMP" << std::endl;
-        //dump_packet_hex(pkt);
-
-        //printHexFrequency(28074000);
-        //printHexFrequency(28074000000);
-
-        //std::lock_guard<std::mutex> lock(UDPEvent_mtx);                     // Locks the UDPEvent mutex
 
         //status packet contains next ft8 message and TX on/off updates
         WSJTX_Status StatusPacket( pkt, NewPacket.index);
@@ -326,8 +285,7 @@ std::string ProcessPacket(char * message, int message_len)
 		strReport = StatusPacket.Report;    //report to send
 		RxDF = StatusPacket.RxDF;       //receive freq offset
         UDPevent = true;                    //flag for main UDP server code to update Arduino
-        //m_parent->m_Ui->m_form->udp_poller.start();         //didnt trigger - trigger 0ms timer to cause update event in Form thread
-																//probably because different thread
+        														//probably because different thread
         return ret;
     }
     else if (NewPacket.PacketType == 2) {
