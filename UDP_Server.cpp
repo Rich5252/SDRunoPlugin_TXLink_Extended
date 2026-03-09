@@ -142,7 +142,7 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
 
     // Set a receive timeout (e.g., 500 milliseconds)
     // The timeout value is in milliseconds for SO_RCVTIMEO
-    int timeout_ms = 500;
+    int timeout_ms = 50;
     if (setsockopt(server_socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout_ms, sizeof(timeout_ms)) == SOCKET_ERROR)
     {
         std::cout << get_millis() << "setsockopt(SO_RCVTIMEO) failed with error code: " << WSAGetLastError() << std::endl;
@@ -169,8 +169,8 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
                 // to check UDPExitRequest. No message was received.
 
 				if (waitCount == 0) { std::cout << std::endl << "UDP waiting : "; }
-                std::cout << " " << ++waitCount;
-                //if ((++waitCount % 5) == 0) { std::cout << " " << waitCount; }
+                //std::cout << " " << ++waitCount;
+                if ((++waitCount % 10) == 0) { std::cout << " " << waitCount; }
 
                 continue; // Go back to the top of the loop to check UDPExitRequest
             }
@@ -220,11 +220,6 @@ std::string ProcessPacket(char * message, int message_len)
     
     WSJTX_Packet NewPacket( pkt, idx);
     NewPacket.Decode();
-	//if (NewPacket.PacketType != 1) { return; } //ignore everything except status packets here
-
-#ifdef debugUDPx 
-    std::cout << "Type: " << NewPacket.PacketType << "  ClientID: " << NewPacket.ClientID << std::endl;
-#endif
 
     if (NewPacket.PacketType == 0) {
         return "Heartbeat ";
