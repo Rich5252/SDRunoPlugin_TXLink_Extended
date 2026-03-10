@@ -56,6 +56,10 @@ uint64_t curFrequency = 0;                  //local store
 uint64_t curTXFrequency = 0;                  //from form
 uint64_t newFrequency = 0;                  // non zero ifchanged (extern)
 bool dataChanged = false;                        //set when new data received from wsjtx to trigger form update
+bool TXeven = true;
+bool TXenabled = false;
+bool TXpreempted = false;
+uint64_t RTCdelay = 400;			//delay in ms currently applied to RTC
 
 std::string FT8TXsymbols = "3140652002457262353553516142250015633140652505007562410457700470324420543140652";       //"NOCALL"
 std::string FT8TxNoSymbols = "0000000000000000000000000000000000000000000000000000000000000000000000000000000";
@@ -172,6 +176,8 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
                 //std::cout << " " << ++waitCount;
                 if ((++waitCount % 10) == 0) { std::cout << " " << waitCount; }
 
+				PreemptiveTXCheck();   // Check for preemptive TX conditions during wait
+
                 continue; // Go back to the top of the loop to check UDPExitRequest
             }
             else
@@ -203,6 +209,7 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
 			std::string strPacketType = ProcessPacket(message, message_len);
 			uint64_t ms = GetCurrentTimeMs();
 			std::cout << get_millis() << "UDP packet : " << strPacketType << " " << FormatUtcTime(ms) << " DTC: " << ms % 3750 << std::endl;
+        
         }
 
 	}                   //loop until UDPExitRequest is set
@@ -211,6 +218,33 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
 	std::cout << "\n" << get_millis() << "UDP Server cleanup..." << std::endl;
     closesocket(server_socket);
     WSACleanup();
+}
+
+void PreemptiveTXCheck()
+{
+
+    uint64_t ms = GetCurrentTimeMs();
+	int SlotNumber = ms % 60000 / 3750;                     //current slot number in minute (0-15)
+	int TimeInSlot = ms % 3750;
+	int TimeToNextSlot = 3750 - TimeInSlot;
+	bool inTxSlot = (((ms / 3750) % 2) == 0) == TXeven;   //true if we are in the TX slot for the current even/odd setting
+
+	// Preemptive TX start for FT2 - start in previous slot if enabled and not already preempted
+    if (WSJTX_TXmodeStr == "FT2" && TXenabled && !inTxSlot && TimeToNextSlot < (RTCdelay) && !TXpreempted)   //note we start TX in previous slot
+    {                                   //expeimental - tx early cf PC RTC since PC clock delayed for SDR etc
+        //should wait for any current UDP event to complete in Form
+        int sleeps = 0;
+        while (UDPevent && sleeps < 5 && !UDPExitRequest)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));         //wait for previous event to be processed
+            sleeps++;
+        }
+        ms = GetCurrentTimeMs();
+        std::cout << std::endl << get_millis() << "Preemptive TX: " << FormatUtcTime(ms) << " Slot: " << SlotNumber << " DTC: " << ms % 3750 << " TXeven: " << TXeven << std::endl;
+        TXpreempted = true;                 //reset when next packet received
+        TXflg = true;                       //force TX now
+        UDPevent = true;    //flag for main UDP server code to update Arduino - avoid handshake race
+    }
 }
 
 std::string ProcessPacket(char * message, int message_len)
@@ -279,8 +313,26 @@ std::string ProcessPacket(char * message, int message_len)
 		DXgrid = StatusPacket.DXgrid;
 		strReport = StatusPacket.Report;    //report to send
 		RxDF = StatusPacket.RxDF;       //receive freq offset
-        UDPevent = true;                    //flag for main UDP server code to update Arduino
-        														//probably because different thread
+
+        //special handling for the Preemptive TX, remember tx period
+		TXenabled = StatusPacket.TxEnabled;
+        if (TXenabled)
+        {
+			uint64_t ms = GetCurrentTimeMs();
+			int DTC = ms % 3750;
+            bool even = (ms / 3750) % 2 == 0;
+			int SlotTimeLeft = 3750 - DTC;
+            if (StatusPacket.Transmitting)   TXeven = even;              //can only be certain when wsjtx is tx'ing
+            if (!StatusPacket.Transmitting && TXenabled && SlotTimeLeft > 3000) TXeven = !even;
+            std::cout << get_millis() << "DataChange: " << dataChanged << " TXenabled. TX: " << StatusPacket.Transmitting << " TXeven: " << TXeven << " Slot: " << (ms % 60000) / 3750  << " SlotTimeLeft: " << SlotTimeLeft << std::endl;
+        }
+        if (StatusPacket.Transmitting)  TXpreempted = false;            //reset preemptive flag when actual TX starts
+
+		PreemptiveTXCheck();                // Check for preemptive TX conditions after processing status update 
+
+        if (!UDPevent) UDPevent = true;     //flag for main UDP server code to update Arduino
+                                            //avoid UDPevent race in case Preempt already set it                    
+
         return ret;
     }
     else if (NewPacket.PacketType == 2) {

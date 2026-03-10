@@ -47,6 +47,7 @@ private:
 	int LoadFanLowPWM();
 	int LoadstrFT8txDelay();
 	int LoadstrTempLimit();
+	int LoadstrTXpremptMs();
 
 	// TODO: Now add your UI controls here
 	nana::label freqCalLbl{ *this, nana::rectangle(20, 13, 85, 20) };
@@ -65,7 +66,9 @@ private:
 	nana::textbox FanLowPWMTb{ *this, nana::rectangle(110, 130, 105, 20) };
 
 	nana::label FT8txDelayLbl{ *this, nana::rectangle(20, 163, 85, 20) };
-	nana::textbox FT8txDelayTb{ *this, nana::rectangle(110, 160, 105, 20) };
+	nana::textbox FT8txDelayTb{ *this, nana::rectangle(110, 160, 55, 20) };
+
+	nana::textbox FT2txPremptMsTb{ *this, nana::rectangle(180, 160, 55, 20) };
 
 	nana::label TempLimitLbl{ *this, nana::rectangle(20, 193, 85, 20) };
 	nana::textbox TempLimitTb{ *this, nana::rectangle(110, 190, 105, 20) };

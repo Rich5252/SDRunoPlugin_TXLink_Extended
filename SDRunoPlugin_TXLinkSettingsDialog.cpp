@@ -151,6 +151,20 @@ int SDRunoPlugin_TemplateSettingsDialog::LoadstrFT8txDelay()
 	return stoi(tmp);
 }
 
+int SDRunoPlugin_TemplateSettingsDialog::LoadstrTXpremptMs()
+{
+	std::string tmp;
+	m_controller.GetConfigurationKey("TXLink.FT2txPremptMs", tmp);
+	if (tmp.empty())
+	{
+		tmp = "300";
+		//?std::lock_guard<std::mutex> l(m_lock);
+		m_controller.SetConfigurationKey("TXLink.FT2txPremptMs", tmp);		//default
+	}
+	FT2txPremptMsTb.caption(tmp);
+	return stoi(tmp);
+}
+
 // Load TempLimit value from the ini file (if exists)
 int SDRunoPlugin_TemplateSettingsDialog::LoadstrTempLimit()
 {
@@ -245,6 +259,13 @@ void SDRunoPlugin_TemplateSettingsDialog::Setup()
 		m_controller.SetConfigurationKey("TXLink.FT8txDelay", strFT8txDelay);
 		});
 
+	FT2txPremptMsTb.multi_lines(false);
+	FT2txPremptMsTb.events().text_changed([&] {
+		string strFT2txPremptMs = FT2txPremptMsTb.caption();
+		//?std::lock_guard<std::mutex> l(m_lock);
+		m_controller.SetConfigurationKey("TXLink.FT2txPremptMs", strFT2txPremptMs);
+		});
+
 	TempLimitLbl.caption("Temp Limit");
 	TempLimitLbl.bgcolor(nana::colors::black);
 	TempLimitLbl.fgcolor(nana::colors::white);
@@ -274,6 +295,7 @@ void SDRunoPlugin_TemplateSettingsDialog::Setup()
 	LoadFanHold();
 	LoadFanLowPWM();
 	LoadstrFT8txDelay();
+	LoadstrTXpremptMs();
 	LoadstrTempLimit();
 }
 

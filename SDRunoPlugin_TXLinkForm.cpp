@@ -1739,6 +1739,33 @@ string SDRunoPlugin_TXLinkForm::GetValidFT8txDelay()
 	return tmp;
 }
 
+string SDRunoPlugin_TXLinkForm::GetValidFT2txPremptMs()
+{
+	string tmp = "";
+	int Val = 250;
+	m_controller.GetConfigurationKey("TXLink.FT2txPremptMs", tmp);			//stored by settings panel
+	if (tmp.empty()) {
+		tmp = "300";								//default
+		Val = 300;
+	}
+	try {
+		Val = stoi(tmp);
+		if (Val < 0 || Val >= 3000)
+		{
+			Val = 300;
+			tmp = "300";
+		}
+	}
+	catch (int errNum) {
+		if (errNum) {};
+		Val = 300;
+		tmp = "300";
+	}
+	std::lock_guard<std::mutex> l(m_lock);
+	m_controller.SetConfigurationKey("TXLink.FT2txPremptMs", tmp);
+	return tmp;
+}
+
 string SDRunoPlugin_TXLinkForm::GetValidTempLimit()
 {
 	string tmp = "";
@@ -1824,6 +1851,7 @@ void SDRunoPlugin_TXLinkForm::SettingsDialog_Closed()
 	SendFanHold(GetValidFanHold());
 	SendFanLowPWM(GetValidFanLowPWM());
 	SendFT8txDelay(GetValidFT8txDelay());
+	RTCdelay = stoi(GetValidFT2txPremptMs());
 	SendTempLimit(GetValidTempLimit());
 }
 
@@ -1845,7 +1873,10 @@ long SDRunoPlugin_TXLinkForm::millisToEnd() {
 
 	long millisToEnd = (59999 - millisecondsInMinute.count()) % 15000 - 170;			//remaining millisecs in 15 sec slot
 	if (WSJTX_TXmodeStr == "FT4") { millisToEnd = (59999 - millisecondsInMinute.count()) % 7500 - 50; }   //7.5sec slot
-	if (WSJTX_TXmodeStr == "FT2") { millisToEnd = (59999 - millisecondsInMinute.count()) % 3750 - 150; }   //3.75sec slot
+	//if (WSJTX_TXmodeStr == "FT2") { millisToEnd = (59999 - millisecondsInMinute.count()) % 3750 - 25 + RTCdelay; }   //3.75sec slot
+
+	//calc millisToEnd of the world UTC
+	if (WSJTX_TXmodeStr == "FT2") { millisToEnd = (3750 - (GetCurrentTimeMs() + RTCdelay) % 3750); }   //3.75sec slot
 
 	//TXtempLbl.caption(to_string(millisToEnd));
 

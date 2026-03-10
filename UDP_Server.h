@@ -15,6 +15,7 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
 LPWSTR ConvertToLPWSTR(const char* charString);
 std::string EncodeMessage(const std::string& WSJTX_TXmodeStr, const std::string& strMessage);
 std::string removeTrailingSpaces(std::string str);
+void PreemptiveTXCheck();
 
 //following are simple comms with the plugin
 extern std::atomic <bool> UDPExitRequest;
@@ -40,6 +41,7 @@ extern uint64_t newFrequency;		// non zero if it has just changed
 extern bool dataChanged;			//set when new data received from wsjtx to trigger form update
 extern std::string strReport;
 extern uint32_t RxDF;
+extern uint64_t RTCdelay;			//delay in ms currently applied to RTC
 
 extern SOCKET server_socket;
 extern ThreadSafeMessageQueue<std::string> WSJTX_UDPInQ;			//data from wsjtx to plugin
