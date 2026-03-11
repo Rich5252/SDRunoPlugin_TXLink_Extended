@@ -56,6 +56,7 @@ uint64_t curFrequency = 0;                  //local store
 uint64_t curTXFrequency = 0;                  //from form
 uint64_t newFrequency = 0;                  // non zero ifchanged (extern)
 bool dataChanged = false;                        //set when new data received from wsjtx to trigger form update
+bool msgChanged = false;                         //set when new message received from wsjtx to trigger form update
 bool TXeven = true;
 bool TXenabled = false;
 bool TXpreempted = false;
@@ -298,10 +299,12 @@ std::string ProcessPacket(char * message, int message_len)
 		TXflg = StatusPacket.Transmitting;  //transmit on/off
 		if (TXDF != StatusPacket.TxDF) { dataChanged = true; }
         TXDF = StatusPacket.TxDF;           //transmit freq offset added to set TX freq
+		msgChanged = false;
         if (LastTXmsg == "" || LastTXmsg != msg)
         {
             TXsymbols = EncodeMessage(WSJTX_TXmodeStr, msg);         //list of tones to transmit
 			dataChanged = true;
+			msgChanged = true;
         }
         else
         {
@@ -323,8 +326,13 @@ std::string ProcessPacket(char * message, int message_len)
             bool even = (ms / 3750) % 2 == 0;
 			int SlotTimeLeft = 3750 - DTC;
             if (StatusPacket.Transmitting)   TXeven = even;              //can only be certain when wsjtx is tx'ing
-            if (!StatusPacket.Transmitting && TXenabled && SlotTimeLeft > 3000) TXeven = !even;
-            std::cout << get_millis() << "DataChange: " << dataChanged << " TXenabled. TX: " << StatusPacket.Transmitting << " TXeven: " << TXeven << " Slot: " << (ms % 60000) / 3750  << " SlotTimeLeft: " << SlotTimeLeft << std::endl;
+            if (!msgChanged && !StatusPacket.Transmitting && TXenabled && SlotTimeLeft > 3000) TXeven = !even;
+			string str1 = dataChanged ? " Data changed. " : " Data unchanged. ";
+			string str2 = msgChanged ? " Message changed. " : " Message unchanged. ";
+			string str3 = TXeven ? " TXslot Even " : " TXslot Odd ";
+			string str4 = StatusPacket.Transmitting ? " Transmitting. " : " Not transmitting. ";
+			string str5 = TXenabled ? " TXenabled. " : " TXdisabled. ";
+            std::cout << get_millis() << str1 << str2 << str5 << str3 << str4 << " Slot: " << (ms % 60000) / 3750  << " SlotTimeLeft: " << SlotTimeLeft << std::endl;
         }
         if (StatusPacket.Transmitting)  TXpreempted = false;            //reset preemptive flag when actual TX starts
 

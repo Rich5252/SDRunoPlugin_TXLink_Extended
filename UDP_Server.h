@@ -39,6 +39,7 @@ extern uint64_t curTX
 ;		//set from form
 extern uint64_t newFrequency;		// non zero if it has just changed
 extern bool dataChanged;			//set when new data received from wsjtx to trigger form update
+extern bool msgChanged;				//set when new message received from wsjtx to trigger form update
 extern std::string strReport;
 extern uint32_t RxDF;
 extern uint64_t RTCdelay;			//delay in ms currently applied to RTC
