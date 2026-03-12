@@ -579,6 +579,7 @@ void SDRunoPlugin_TXLinkForm::Setup()
 
 	m_timer.start();
 
+	LoadRTCdelay();
 	udp_poller.interval(std::chrono::milliseconds(10));
 	udp_poller.start();
 	udp_poller.elapse([&] {
@@ -1739,18 +1740,18 @@ string SDRunoPlugin_TXLinkForm::GetValidFT8txDelay()
 	return tmp;
 }
 
-string SDRunoPlugin_TXLinkForm::GetValidFT2txPremptMs()
+string SDRunoPlugin_TXLinkForm::GetValidRTCdelayOffset()
 {
 	string tmp = "";
 	int Val = 250;
-	m_controller.GetConfigurationKey("TXLink.FT2txPremptMs", tmp);			//stored by settings panel
+	m_controller.GetConfigurationKey("TXLink.RTCdelayOffset", tmp);			//stored by settings panel
 	if (tmp.empty()) {
 		tmp = "300";								//default
 		Val = 300;
 	}
 	try {
 		Val = stoi(tmp);
-		if (Val < 0 || Val >= 3000)
+		if (Val < 0 || Val >= 1000)
 		{
 			Val = 300;
 			tmp = "300";
@@ -1762,9 +1763,37 @@ string SDRunoPlugin_TXLinkForm::GetValidFT2txPremptMs()
 		tmp = "300";
 	}
 	std::lock_guard<std::mutex> l(m_lock);
-	m_controller.SetConfigurationKey("TXLink.FT2txPremptMs", tmp);
+	m_controller.SetConfigurationKey("TXLink.RTCdelayOffset", tmp);
 	return tmp;
 }
+
+string SDRunoPlugin_TXLinkForm::GetValidRTCcurrentDelay()
+{
+	string tmp = "";
+	int Val = 250;
+	m_controller.GetConfigurationKey("TXLink.RTCcurrentDelay", tmp);			//stored by settings panel
+	if (tmp.empty()) {
+		tmp = "300";								//default
+		Val = 300;
+	}
+	try {
+		Val = stoi(tmp);
+		if (Val < 0 || Val >= 1000)
+		{
+			Val = 300;
+			tmp = "300";
+		}
+	}
+	catch (int errNum) {
+		if (errNum) {};
+		Val = 300;
+		tmp = "300";
+	}
+	std::lock_guard<std::mutex> l(m_lock);
+	m_controller.SetConfigurationKey("TXLink.RTCcurrentDelay", tmp);
+	return tmp;
+}
+
 
 string SDRunoPlugin_TXLinkForm::GetValidTempLimit()
 {
@@ -1851,7 +1880,9 @@ void SDRunoPlugin_TXLinkForm::SettingsDialog_Closed()
 	SendFanHold(GetValidFanHold());
 	SendFanLowPWM(GetValidFanLowPWM());
 	SendFT8txDelay(GetValidFT8txDelay());
-	RTCdelay = stoi(GetValidFT2txPremptMs());
+	RTCdelayOffset = stoi(GetValidRTCdelayOffset());
+	RTCdelay = RTCcurrentDelay - RTCdelayOffset;
+	RTCdelay < 50 ? RTCdelay = 50 : RTCdelay;
 	SendTempLimit(GetValidTempLimit());
 }
 
@@ -2006,6 +2037,20 @@ string SDRunoPlugin_TXLinkForm::LoadOFS()
 	return tmp;
 }
 
+void SDRunoPlugin_TXLinkForm::LoadRTCdelay()
+{
+	RTCdelayOffset = stoi(GetValidRTCdelayOffset());
+	RTCcurrentDelay = stoi(GetValidRTCcurrentDelay());
+	RTCdelay = RTCcurrentDelay - RTCdelayOffset;
+	RTCdelay < 50 ? RTCdelay = 50 : RTCdelay;
+}
+
+void SDRunoPlugin_TXLinkForm::SaveRTCdelay()
+{
+	m_controller.SetConfigurationKey("TXLink.RTCdelayOffset", to_string(RTCdelayOffset));
+	m_controller.SetConfigurationKey("TXLink.RTCcurrentDelay", to_string(RTCcurrentDelay));
+}
+
 void SDRunoPlugin_TXLinkForm::SaveRIT(string strRIT)
 {
 	m_controller.SetConfigurationKey("TXLink.RIT", strRIT);
@@ -2086,6 +2131,7 @@ void SDRunoPlugin_TXLinkForm::SaveIniData()
 	SaveRIT(GetRIT());
 	SaveOFS(GetOFS());
 	SaveSplitMode();
+	SaveRTCdelay();
 	//*/
 	std::cout << get_millis() << " SDRunoPlugin_TXLinkUi::SaveIniData complete" << std::endl;
 }

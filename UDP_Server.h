@@ -42,7 +42,9 @@ extern bool dataChanged;			//set when new data received from wsjtx to trigger fo
 extern bool msgChanged;				//set when new message received from wsjtx to trigger form update
 extern std::string strReport;
 extern uint32_t RxDF;
-extern uint64_t RTCdelay;			//delay in ms currently applied to RTC
+extern int RTCdelay;			//actual preemptive advanced start for FT2 = RTCcurrentDelay - RTCdelayOffset
+extern int RTCdelayOffset;		//local offset from Settings that reduces RTCcurrentDelay value
+extern int RTCcurrentDelay;	//current delay in ms applied to RTC - updated from NamedPipe
 
 extern SOCKET server_socket;
 extern ThreadSafeMessageQueue<std::string> WSJTX_UDPInQ;			//data from wsjtx to plugin

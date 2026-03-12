@@ -14,7 +14,11 @@
 // for self-containment, but only createAndListen is shown in detail for clarity.
 
 NamedPipeServer::NamedPipeServer(const std::string& pipeName, size_t bufferSize)
-    : pipeName_(pipeName), bufferSize_(bufferSize), hPipe_(INVALID_HANDLE_VALUE), connected_(false) {
+    : pipeName_(pipeName), bufferSize_(bufferSize), hPipe_(INVALID_HANDLE_VALUE),
+    connected_(false), hConnectEvent_(NULL) {
+
+    // Initialize overlapped structure
+    ZeroMemory(&connectOverlap_, sizeof(OVERLAPPED));
 }
 
 NamedPipeServer::~NamedPipeServer() {
@@ -273,58 +277,6 @@ bool NamedPipeServer::writeMessage(const std::string& message) {
     return true;
 }
 
-/**
- * @brief Writes a message to the connected client.
- * @param message The message to send.
- * @return true if successful, false otherwise.
- */
-/*
-bool NamedPipeServer::writeMessage(const std::string& message) {
-    if (!connected_ || hPipe_ == INVALID_HANDLE_VALUE) {
-        std::cerr << "WARNING: Cannot write, pipe is not connected." << std::endl;
-        return false;
-    }
-
-    DWORD cbWritten = 0;
-
-    // Write the message plus a null terminator to be robust on the client side
-    std::string dataToWrite = message + '\0';
-
-    // NOTE: WriteFile is synchronous and typically does not require overlapped I/O 
-    // unless the write is expected to be very slow (which is rare for pipes).
-    BOOL fSuccess = WriteFile(
-        hPipe_,
-        dataToWrite.c_str(),
-        dataToWrite.length(), // Write the bytes including the null terminator
-        &cbWritten,
-        NULL);
-
-    if (!fSuccess) {
-        std::cerr << "ERROR: Failed to write to pipe. Code: " << GetLastError() << std::endl;
-        return false;
-    }
-    return true;
-}
-*/
-
-/**
- * @brief Disconnects and closes the pipe handle.
- */
-/*
-void NamedPipeServer::close() {
-    if (hPipe_ != INVALID_HANDLE_VALUE) {
-        if (connected_) {
-            FlushFileBuffers(hPipe_);
-            DisconnectNamedPipe(hPipe_);
-            connected_ = false;
-            std::cout << "NamedPipeServer::close - Pipe disconnected." << std::endl;
-        }
-        std::cout << "NamedPipeServer::close - Close handle." << std::endl;
-        CloseHandle(hPipe_);
-        hPipe_ = INVALID_HANDLE_VALUE;
-    }
-}
-*/
 
 void NamedPipeServer::close() {
     if (hPipe_ != INVALID_HANDLE_VALUE) {
@@ -373,69 +325,104 @@ bool NamedPipeServer::isConnected() const {
     return connected_;
 }
 
-/*
-// --- Demonstration Main Function (This would be your TXLink pipe thread function) ---
-int main() {
-    const std::string PIPE_NAME = "\\\\.\\pipe\\TXLinkCommandPipe";
-    NamedPipeServer server(PIPE_NAME);
 
-    // --- 5-Second Connection Timeout ---
-    const DWORD CONNECTION_TIMEOUT_MS = 5000;
-    // --- 2-Second Wait Between Failed Attempts ---
-    const int RETRY_WAIT_MS = 2000;
+// --- Additional Methods for Asynchronous Operation (Non-blocking) ---
+// ASYNC methods for UDP
+// --------------------------------------------------------------------
 
-    // Flag to control the outer connection loop
-    bool isConnected = false;
 
-    // 1. Connection/Reconnection Loop
-    std::cout << "Starting connection monitoring thread..." << std::endl;
-    do {
-        // Attempt to create the pipe and connect with a timeout
-        if (server.createAndListen(CONNECTION_TIMEOUT_MS)) {
-            isConnected = true;
-            break; // Exit connection loop, proceed to message loop
-        }
-        else {
-            // Connection failed (timed out or error).
-            std::cout << "VB6 client not found. Retrying in " << RETRY_WAIT_MS / 1000 << " seconds..." << std::endl;
-            // IMPORTANT: Wait before retrying to prevent CPU usage spike.
-            std::this_thread::sleep_for(std::chrono::milliseconds(RETRY_WAIT_MS));
-        }
+/**
+ * @brief Creates the pipe and starts an asynchronous connection attempt.
+ * Returns immediately so your UDP loop can keep running.
+ */
+bool NamedPipeServer::createAndListenAsync() {
+    if (hPipe_ != INVALID_HANDLE_VALUE) return true;
 
-    } while (true); // Loop until connection is established
+    // Create the persistent event for polling
+    if (hConnectEvent_ == NULL) {
+        hConnectEvent_ = CreateEvent(NULL, TRUE, FALSE, NULL);
+    }
+    connectOverlap_.hEvent = hConnectEvent_;
 
-    // 2. Main Message Loop (Only runs when connected)
-    std::cout << "\nSUCCESS: Connection established. Starting non-blocking read loop (100ms timeout)..." << std::endl;
-    while (server.isConnected()) {
-        try {
-            // Read with a 100 millisecond timeout
-            std::string message = server.readMessage(100);
+    hPipe_ = CreateNamedPipeA(
+        pipeName_.c_str(),
+        PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED, // Overlapped for non-blocking
+        PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE,
+        PIPE_UNLIMITED_INSTANCES,
+        bufferSize_, bufferSize_, 0, NULL);
 
-            if (!message.empty()) {
-                std::cout << "\n[APPLICATION] Received Command: " << message << std::endl;
-                if (message == "GET_STATUS") {
-                    server.writeMessage("STATUS:READY");
-                }
-            }
+    if (hPipe_ == INVALID_HANDLE_VALUE) return false;
 
-        }
-        catch (const std::runtime_error& e) {
-            // Handle disconnection (e.g., if VB6 app closes)
-            std::cerr << "Pipe Error: " << e.what() << std::endl;
-            server.close();
-            isConnected = false;
-
-            // Break the read loop to return to the connection loop
-            break;
+    // Start the connection attempt
+    if (!ConnectNamedPipe(hPipe_, &connectOverlap_)) {
+        DWORD dwError = GetLastError();
+        if (dwError != ERROR_IO_PENDING && dwError != ERROR_PIPE_CONNECTED) {
+            close();
+            return false;
         }
     }
 
-    // If the loop exits due to disconnection, the TXLink thread can either:
-    // a) Restart the entire process by jumping back to the connection loop.
-    // b) Terminate, as shown here.
-
-    std::cout << "Server loop finished. Press Enter to exit." << std::endl;
-    std::cin.get();
-    return 0;
+    // If we reach here, the pipe is waiting for a client in the background
+    return true;
 }
-*/
+
+/**
+ * @brief Polling method to check if a client has connected.
+ * Use this in your loop to see if it's time to start reading.
+ */
+bool NamedPipeServer::pollConnection() {
+    if (connected_) return true;
+    if (hPipe_ == INVALID_HANDLE_VALUE) return false;
+
+    // Check event status with 0ms timeout
+    if (WaitForSingleObject(hConnectEvent_, 0) == WAIT_OBJECT_0) {
+        DWORD cbTransfer;
+        if (GetOverlappedResult(hPipe_, &connectOverlap_, &cbTransfer, FALSE)) {
+            connected_ = true;
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * @brief Non-blocking data check using PeekNamedPipe.
+ * Perfect for a high-frequency UDP loop.
+ */
+bool NamedPipeServer::pollData(std::string& outMessage) {
+    if (!connected_) return false;
+
+    DWORD bytesAvailable = 0;
+    // Check if data is waiting without removing it from the buffer
+    if (PeekNamedPipe(hPipe_, NULL, 0, NULL, &bytesAvailable, NULL)) {
+        if (bytesAvailable > 0) {
+            // Existing readMessage uses overlapped I/O, so with data 
+            // already "peeked", it will return immediately.
+            try {
+                outMessage = readMessage(0);
+                return !outMessage.empty();
+            }
+            catch (...) {
+                return false;
+            }
+        }
+    }
+    else if (GetLastError() == ERROR_BROKEN_PIPE) {
+        // Handle client disconnection (RTCupdate closed)
+        resetPipe();
+    }
+    return false;
+}
+
+/**
+ * @brief Resets the pipe to a listening state after a client disconnects.
+ */
+void NamedPipeServer::resetPipe() {
+    connected_ = false;
+    if (hPipe_ != INVALID_HANDLE_VALUE) {
+        DisconnectNamedPipe(hPipe_);
+        ResetEvent(hConnectEvent_);
+        ConnectNamedPipe(hPipe_, &connectOverlap_);
+    }
+}
+

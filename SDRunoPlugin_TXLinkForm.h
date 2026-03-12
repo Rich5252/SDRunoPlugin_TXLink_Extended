@@ -135,7 +135,10 @@ private:
 	string GetValidFanHold();
 	string GetValidFanLowPWM();
 	string GetValidFT8txDelay();
-	string GetValidFT2txPremptMs();
+	string GetValidRTCdelayOffset();
+	string GetValidRTCcurrentDelay();
+	void LoadRTCdelay();
+	void SaveRTCdelay();
 	string GetValidTempLimit();
 	string GetSetConfigurationKey(std::string strItem, std::string strDefault);
 	void CloseCOMPort();

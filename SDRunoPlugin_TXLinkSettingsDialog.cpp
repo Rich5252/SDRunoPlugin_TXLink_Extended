@@ -154,12 +154,12 @@ int SDRunoPlugin_TemplateSettingsDialog::LoadstrFT8txDelay()
 int SDRunoPlugin_TemplateSettingsDialog::LoadstrTXpremptMs()
 {
 	std::string tmp;
-	m_controller.GetConfigurationKey("TXLink.FT2txPremptMs", tmp);
+	m_controller.GetConfigurationKey("TXLink.RTCdelayOffset", tmp);
 	if (tmp.empty())
 	{
 		tmp = "300";
 		//?std::lock_guard<std::mutex> l(m_lock);
-		m_controller.SetConfigurationKey("TXLink.FT2txPremptMs", tmp);		//default
+		m_controller.SetConfigurationKey("TXLink.RTCdelayOffset", tmp);		//default
 	}
 	FT2txPremptMsTb.caption(tmp);
 	return stoi(tmp);
@@ -263,7 +263,7 @@ void SDRunoPlugin_TemplateSettingsDialog::Setup()
 	FT2txPremptMsTb.events().text_changed([&] {
 		string strFT2txPremptMs = FT2txPremptMsTb.caption();
 		//?std::lock_guard<std::mutex> l(m_lock);
-		m_controller.SetConfigurationKey("TXLink.FT2txPremptMs", strFT2txPremptMs);
+		m_controller.SetConfigurationKey("TXLink.RTCdelayOffset", strFT2txPremptMs);
 		});
 
 	TempLimitLbl.caption("Temp Limit");

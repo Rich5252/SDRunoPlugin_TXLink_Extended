@@ -61,9 +61,17 @@ public:
      */
     bool isConnected() const;
 
+	//ASYNC methods for UDP
+    bool createAndListenAsync();
+	bool pollConnection();
+    bool pollData(std::string& outMessage);
+	void resetPipe();
+
 private:
     std::string pipeName_;
     size_t bufferSize_;
     HANDLE hPipe_;
     bool connected_;
+    HANDLE hConnectEvent_;              // Persistent event for connection polling
+    OVERLAPPED connectOverlap_;         // Persistent overlapped structure
 };

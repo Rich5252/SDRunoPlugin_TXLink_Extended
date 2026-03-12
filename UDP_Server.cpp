@@ -60,7 +60,10 @@ bool msgChanged = false;                         //set when new message received
 bool TXeven = true;
 bool TXenabled = false;
 bool TXpreempted = false;
-uint64_t RTCdelay = 400;			//delay in ms currently applied to RTC
+int RTCdelay = 300;			//delay in ms currently applied to RTC
+int RTCdelayOffset = 0;		//local offset from Settings that reduces RTCdelay value
+int RTCcurrentDelay = 300;	//current delay in ms applied to RTC - updated from NamedPipe
+
 
 std::string FT8TXsymbols = "3140652002457262353553516142250015633140652505007562410457700470324420543140652";       //"NOCALL"
 std::string FT8TxNoSymbols = "0000000000000000000000000000000000000000000000000000000000000000000000000000000";
@@ -102,6 +105,15 @@ void dump_packet_hex(const std::vector<uint8_t>& packet) {
     }
     std::cout << "\n--- INCOMING HEX DUMP (" << packet.size() << " bytes) ---\n" << ss.str() << std::endl;
 }
+
+// *********  NamedPipeServer class to get RTCupdate app offset ms. *********
+// Pipe name MUST match the VB6 client exactly!
+#define PIPE_NAME "\\\\.\\pipe\\TXLinkCommandPipeUDP"
+#define BUFSIZE 512
+#define PipeTimeout 10		//time to wait for client to connect
+#define ReadTimeout 10		//time to wait for read message
+
+NamedPipeServer UDPpipe(PIPE_NAME, BUFSIZE);					//get messages from RTCupdater app
 
 
 //wsjtx UDP datagram server with parser and ft8 encoding using wsjtx ft8code.exe utility
@@ -154,9 +166,32 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
         // Decide if you want to exit or log a warning and continue without timeout
     }
 
+	UDPpipe.createAndListenAsync();     //init NamedPipeServer to listen for RTC delay updates
+
 	int waitCount = 0;
     while (!UDPExitRequest)
     {
+        //check NamedPipe connection and get any update of the offset value
+		if (UDPpipe.pollConnection())
+        {
+            std::string msg;
+            if (UDPpipe.pollData(msg))
+            {
+                //msg received
+                try {
+                    int newDelay = std::stoi(msg);
+                    RTCcurrentDelay = static_cast<uint64_t>(newDelay);
+                    
+                    RTCdelay = RTCcurrentDelay - RTCdelayOffset;
+                    RTCdelay < 50 ? RTCdelay = 50 : RTCdelay;
+                    std::cout << get_millis() << "Updated RTC delay: " << RTCcurrentDelay << " ms. Preempt: " << RTCdelay << std::endl;
+                }
+                catch (const std::exception& e) {
+                    std::cerr << get_millis() << "Error parsing RTC delay from pipe message: " << msg << ". Exception: " << e.what() << std::endl;
+				}
+            }
+        }
+
         char message[BUFLEN] = {};
 
         // try to receive some data, this is a blocking call
@@ -209,7 +244,8 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
             waitCount = 0;                              // Reset wait count on successful receive
 			std::string strPacketType = ProcessPacket(message, message_len);
 			uint64_t ms = GetCurrentTimeMs();
-			std::cout << get_millis() << "UDP packet : " << strPacketType << " " << FormatUtcTime(ms) << " DTC: " << ms % 3750 << std::endl;
+			string str1 = FormatUtcTime(ms) + " DTC: " + to_string(ms % 3750);
+			std::cout << get_millis() << "UDP packet : " << strPacketType << " " << str1 << std::endl;
         
         }
 
@@ -217,6 +253,7 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
 
 	// Cleanup
 	std::cout << "\n" << get_millis() << "UDP Server cleanup..." << std::endl;
+	UDPpipe.close();                // Ensure the NamedPipeServer is closed properly
     closesocket(server_socket);
     WSACleanup();
 }
@@ -241,7 +278,8 @@ void PreemptiveTXCheck()
             sleeps++;
         }
         ms = GetCurrentTimeMs();
-        std::cout << std::endl << get_millis() << "Preemptive TX: " << FormatUtcTime(ms) << " Slot: " << SlotNumber << " DTC: " << ms % 3750 << " TXeven: " << TXeven << std::endl;
+		string str1 = ( TXeven ? " TX even. " : "TX odd. " );
+        std::cout << std::endl << get_millis() << "Preemptive TX: " << FormatUtcTime(ms) << " Slot: " << SlotNumber << " DTC: " << ms % 3750 << str1 << "RTCdelay: " << RTCdelay << std::endl;
         TXpreempted = true;                 //reset when next packet received
         TXflg = true;                       //force TX now
         UDPevent = true;    //flag for main UDP server code to update Arduino - avoid handshake race
@@ -730,3 +768,5 @@ LPWSTR ConvertToLPWSTR(const char* charString) {
     MultiByteToWideChar(CP_ACP, 0, charString, -1, wcharString, len);
     return wcharString;
 }
+
+
