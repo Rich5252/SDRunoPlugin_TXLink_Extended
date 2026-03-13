@@ -59,7 +59,8 @@ bool dataChanged = false;                        //set when new data received fr
 bool msgChanged = false;                         //set when new message received from wsjtx to trigger form update
 bool TXeven = true;
 bool TXenabled = false;
-bool TXpreempted = false;
+bool TXpreempted = false;           //Preemptive TX has started
+uint64_t  PreemptiveTXstartMs = 0;  //  start time
 int RTCdelay = 300;			//delay in ms currently applied to RTC
 int RTCdelayOffset = 0;		//local offset from Settings that reduces RTCdelay value
 int RTCcurrentDelay = 300;	//current delay in ms applied to RTC - updated from NamedPipe
@@ -184,9 +185,11 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
                     
                     RTCdelay = RTCcurrentDelay - RTCdelayOffset;
                     RTCdelay < 50 ? RTCdelay = 50 : RTCdelay;
-                    std::cout << get_millis() << "Updated RTC delay: " << RTCcurrentDelay << " ms. Preempt: " << RTCdelay << std::endl;
+                    std::cout << std::endl;
+                    std::cout << get_millis() << "Updated RTC current delay: " << RTCcurrentDelay << " ms. Preempt: " << RTCdelay << std::endl;
                 }
                 catch (const std::exception& e) {
+                    std::cout << std::endl;
                     std::cerr << get_millis() << "Error parsing RTC delay from pipe message: " << msg << ". Exception: " << e.what() << std::endl;
 				}
             }
@@ -244,8 +247,8 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
             waitCount = 0;                              // Reset wait count on successful receive
 			std::string strPacketType = ProcessPacket(message, message_len);
 			uint64_t ms = GetCurrentTimeMs();
-			string str1 = FormatUtcTime(ms) + " DTC: " + to_string(ms % 3750);
-			std::cout << get_millis() << "UDP packet : " << strPacketType << " " << str1 << std::endl;
+			string str1 = get_millis() + "UDP packet : " + strPacketType + " " + FormatUtcTime(ms) + " DTC: " + to_string(ms % 3750) + "\r\n";
+			std::cout <<  str1;
         
         }
 
@@ -277,12 +280,13 @@ void PreemptiveTXCheck()
             std::this_thread::sleep_for(std::chrono::milliseconds(10));         //wait for previous event to be processed
             sleeps++;
         }
-        ms = GetCurrentTimeMs();
-		string str1 = ( TXeven ? " TX even. " : "TX odd. " );
-        std::cout << std::endl << get_millis() << "Preemptive TX: " << FormatUtcTime(ms) << " Slot: " << SlotNumber << " DTC: " << ms % 3750 << str1 << "RTCdelay: " << RTCdelay << std::endl;
-        TXpreempted = true;                 //reset when next packet received
-        TXflg = true;                       //force TX now
-        UDPevent = true;    //flag for main UDP server code to update Arduino - avoid handshake race
+        PreemptiveTXstartMs = GetCurrentTimeMs();
+		string str1 = ( TXeven ? " TX even. " : " TX odd. " );
+        string str2 = "\r\n" + get_millis() + "Preemptive TX: " + FormatUtcTime(PreemptiveTXstartMs) + " Slot: " + to_string(SlotNumber) + " DTC: " + to_string(PreemptiveTXstartMs % 3750) + str1 + "RTCdelay: " + to_string(RTCdelay) + "\r\n";
+        std::cout << str2;
+        TXpreempted = true;      //indicates when Preempted TX has started. Reset when next packet received (checking correct slot)
+        TXflg = true;            //force TX now
+        UDPevent = true;         //flag for main UDP server code to update Arduino - avoid handshake race
     }
 }
 
@@ -314,7 +318,7 @@ std::string ProcessPacket(char * message, int message_len)
 		if (msg == "") { msg = "CQ G4AHN IO91"; }                           //default message if empty
 
 		
-        if (UDPevent) { std::cout << "UDP_Server: ******* WARNING ************  UDP event already set" << std::endl; }
+        if (UDPevent) { std::cout << "UDP_Server: ******* WARNING ************  UDP event already set\r\n"; }
 		int sleeps = 0;
         while (UDPevent && sleeps < 50)
         {
@@ -360,8 +364,18 @@ std::string ProcessPacket(char * message, int message_len)
         if (TXenabled)
         {
 			uint64_t ms = GetCurrentTimeMs();
-			int DTC = ms % 3750;
-            bool even = (ms / 3750) % 2 == 0;
+            int DTC = ms % 3750;
+            if (TXpreempted && (ms - PreemptiveTXstartMs) < 1000 && !StatusPacket.Transmitting)
+                       // We are in the slot following preemptive TX but wsjtx says not TX so must mean slot was wrong
+                        // so do a halt TX
+            {
+                UDPHaltTXevent = true;
+                TXpreempted = false;
+                string str1 = get_millis() + "Preemptive TX Halt. DTC: " + to_string(DTC) + "\r\n";
+				std::cout << str1;
+            }
+
+			bool even = (ms / 3750) % 2 == 0;
 			int SlotTimeLeft = 3750 - DTC;
             if (StatusPacket.Transmitting)   TXeven = even;              //can only be certain when wsjtx is tx'ing
             if (!msgChanged && !StatusPacket.Transmitting && TXenabled && SlotTimeLeft > 3000) TXeven = !even;
@@ -374,7 +388,7 @@ std::string ProcessPacket(char * message, int message_len)
         }
         if (StatusPacket.Transmitting)  TXpreempted = false;            //reset preemptive flag when actual TX starts
 
-		PreemptiveTXCheck();                // Check for preemptive TX conditions after processing status update 
+		if (!UDPHaltTXevent) PreemptiveTXCheck();                // Check for preemptive TX conditions after processing status update 
 
         if (!UDPevent) UDPevent = true;     //flag for main UDP server code to update Arduino
                                             //avoid UDPevent race in case Preempt already set it                    
@@ -450,158 +464,6 @@ std::string removeTrailingSpaces(std::string str) {
     return str;
 }
 
-
-
-/*
-std::string EncodeMessage(std::string WSJTX_TXmodeStr, std::string strMessage)
-{
-    // use wsjtx ft8code.exe utility to encode next ft8 message into 79 symbols list (tone numbers)
-    // input is the required FT8 message, output is the symbols list (79 chars)
-    // the external strDecodeMsg is set to the text message that will be decoded by wsjtx
-    // if an error occurs then the symbols are set to "NOCALL" and the strDecodeMsg set to error msg
-    // Create a command line string to execute the Consul app
-
-	std::cout << get_millis() << "EncodeMessage start: " << WSJTX_TXmodeStr << " " << strMessage << std::endl;
-
-    TxNoSymbols = FT8TxNoSymbols;
-    if (WSJTX_TXmodeStr == "FT4") { TxNoSymbols = FT4TxNoSymbols; }      //TX fixed freq.
-    
-    //TUNE
-    if (strMessage == "TUNE")
-    {
-        strDecodeMsg = "TUNE";
-        return TxNoSymbols;                                         //default is FT8
-    }
-
-    std::string command = "\"" + strFT8WSJTXpath + "\"";        //default is FT8
-    if (WSJTX_TXmodeStr == "FT4") { command = "\"" + strFT4WSJTXpath + "\""; }
-    command = command + " \"" + strMessage + "\"";
-
-    //example messages, see "ft8code.exe -T" for full list encoded by wsjtx
-    //command = command + " \"<GM750XXX/P> GM7AHN/P RR73\"";
-    //command = command + " \"GM7XXX GM7AHN RR73\"";
-
-    HANDLE g_hChildStd_OUT_Rd = NULL;
-    HANDLE g_hChildStd_OUT_Wr = NULL;
-    HANDLE g_hChildStd_IN_Rd = NULL;
-    HANDLE g_hChildStd_IN_Wr = NULL;
-    SECURITY_ATTRIBUTES saAttr{};
-
-    // Set up the security attributes for the pipes
-    saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
-    saAttr.bInheritHandle = TRUE;
-    saAttr.lpSecurityDescriptor = NULL;
-
-    // Create pipes for the child process's STDOUT and STDIN
-    if (!CreatePipe(&g_hChildStd_OUT_Rd, &g_hChildStd_OUT_Wr, &saAttr, 0)) {
-        std::cerr << "ftxcode.exe CreatePipe failed." << std::endl;
-        strDecodeMsg = "ftxcode.exe CreatePipe failed";
-        return TxNoSymbols;
-    }
-
-    // Ensure the read and write handles to the pipes for STDOUT and STDIN are not inherited
-    if (!SetHandleInformation(g_hChildStd_OUT_Rd, HANDLE_FLAG_INHERIT, 0)) {
-        std::cerr << "SetHandleInformation failed" << std::endl;
-        strDecodeMsg = "ftxcode.exe SetHandleInformation failed";
-        return TxNoSymbols;
-    }
-
-    // Create the child process
-    PROCESS_INFORMATION piProcInfo;
-    STARTUPINFO siStartInfo;
-
-    ZeroMemory(&piProcInfo, sizeof(PROCESS_INFORMATION));
-    ZeroMemory(&siStartInfo, sizeof(STARTUPINFO));
-
-    siStartInfo.cb = sizeof(STARTUPINFO);
-    siStartInfo.hStdError = g_hChildStd_OUT_Wr;
-    siStartInfo.hStdOutput = g_hChildStd_OUT_Wr;
-    siStartInfo.hStdInput = g_hChildStd_IN_Rd;
-    siStartInfo.dwFlags |= STARTF_USESTDHANDLES;
-
-    // invoke Windows console application
-    if (!CreateProcess(NULL, ConvertToLPWSTR(command.c_str()), NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &siStartInfo, &piProcInfo)) {
-        std::cerr << "CreateProcess failed" << std::endl;
-        strDecodeMsg = "ftxcode.exe CreateProcess failed";
-        return TxNoSymbols;
-    }
-
-   // Close the write end of the pipe so the child process stops reading
-    //CloseHandle(g_hChildStd_IN_Wr);
-
-    // Read the output from the child process's pipe for STDOUT
-    DWORD dwRead = 0;
-    CHAR chBuf[9182] = "";
-    BOOL bSuccess = FALSE;
-    std::string strLine = "";
-    std::string symbols = "";
-    int lineCount = 0;
-
-    //need to read char by char as app hangs if you try and read past last char out
-    while ((bSuccess = ReadFile(g_hChildStd_OUT_Rd, chBuf, 1, &dwRead, NULL)) && dwRead != 0) {
-        strLine = strLine + std::string(chBuf, dwRead);
-        if (strLine.length() > 1 && strLine.substr(strLine.length() - 2) == "\r\n")
-        {
-            symbols = strLine;
-#ifdef debugUDP
-            std::cout << strLine;
-#endif
-            
-            lineCount++;
-            switch (lineCount) {
-            case 1:
-                // check first line
-                if (!(strLine.length() == 89 && strLine.substr(42, 7) == "Decoded"))
-                {
-                    strDecodeMsg = "Encode error L1 - " + to_string(strLine.length());
-                    return TxNoSymbols;
-                }
-                break;
-            case 3:
-                // extract "Decoded" msg which shows what is actually encoded in message symbols
-                if (!(strLine.length() >= 98))
-                {
-                    strDecodeMsg = "Encode error L3 - " + to_string(strLine.length());
-                    return TxNoSymbols;
-                }
-                strDecodeMsg = removeTrailingSpaces(strLine.substr(42, 40));
-                break;
-            }
-            strLine = "";
-        }
-        if (WSJTX_TXmodeStr == "FT8" && lineCount >= 16) { break; }     // 16th line is the encoded tone list
-        if (WSJTX_TXmodeStr == "FT4" && lineCount >= 22) { break; }     // 22th line is the encoded tone list
-    }
-
-    //remove spaces and CRLF
-    symbols.erase(std::remove(symbols.begin(), symbols.end(), ' '), symbols.end());
-    //check and remove cr/lf
-    if (WSJTX_TXmodeStr == "FT8" && symbols.length() == 81)
-    {
-        symbols = symbols.substr(0, 79);
-    }
-    else if (WSJTX_TXmodeStr == "FT4" && symbols.length() == 107)
-    {
-        symbols = symbols.substr(0, 105);
-    }
-    else
-    {
-        strDecodeMsg = "ftxcode.exe symbols error - " + to_string(symbols.length());
-        symbols = TxNoSymbols;
-    }
-    //strDecodeMsg = to_string(symbols.length());
-
-    // Close process and thread handles
-    CloseHandle(piProcInfo.hProcess);
-    CloseHandle(piProcInfo.hThread);
-
-#ifdef debugUDP
-    std::cout << "\nDone: " << "symbols length = " << symbols.length() << "  strDecodeMsg = " << strDecodeMsg << std::endl;
-    std::cout << symbols << std::endl;
-#endif
-    return symbols;
-}
-*/
 
 std::string EncodeMessage(const std::string& WSJTX_TXmodeStr, const std::string& strMessage) {
     std::cout << get_millis() << "EncodeMessage start: " << WSJTX_TXmodeStr << " " << strMessage << std::endl;
