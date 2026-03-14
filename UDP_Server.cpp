@@ -271,7 +271,7 @@ void PreemptiveTXCheck()
 	bool inTxSlot = (((ms / 3750) % 2) == 0) == TXeven;   //true if we are in the TX slot for the current even/odd setting
 
 	// Preemptive TX start for FT2 - start in previous slot if enabled and not already preempted
-    if (WSJTX_TXmodeStr == "FT2" && TXenabled && !inTxSlot && TimeToNextSlot < (RTCdelay) && !TXpreempted)   //note we start TX in previous slot
+    if (WSJTX_TXmodeStr == "FT2" && strDecodeMsg != "TUNE" && TXenabled && !inTxSlot && TimeToNextSlot < (RTCdelay) && !TXpreempted)   //note we start TX in previous slot
     {                                   //expeimental - tx early cf PC RTC since PC clock delayed for SDR etc
         //should wait for any current UDP event to complete in Form
         int sleeps = 0;
