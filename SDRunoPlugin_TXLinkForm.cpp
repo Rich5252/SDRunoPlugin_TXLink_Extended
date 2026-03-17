@@ -1036,11 +1036,12 @@ void SDRunoPlugin_TXLinkForm::ReTransmit() {
 	//diagnostic only
 
 	uint64_t Ms = GetCurrentTimeMs();
-	Ms = Ms % 3750;
+	int slotPeriod = WSJTX_TXmodeStr == "FT2" ? 3750 : (WSJTX_TXmodeStr == "FT4" ? 7500 : 15000);
+	Ms = Ms % slotPeriod;
 	while (Ms > 10)
 	{
 		std::this_thread::sleep_for(std::chrono::milliseconds(5));
-		Ms = GetCurrentTimeMs() % 3750;
+		Ms = GetCurrentTimeMs() % slotPeriod;
 	}
 
 	long TimeToEnd = millisToEnd();
@@ -1903,8 +1904,9 @@ long SDRunoPlugin_TXLinkForm::millisToEnd() {
 	//std::cout << "Milliseconds since the start of the current minute: " << millisecondsInMinute.count() << std::endl;
 
 	long millisToEnd = (59999 - millisecondsInMinute.count()) % 15000 - 170;			//remaining millisecs in 15 sec slot
-	if (WSJTX_TXmodeStr == "FT4") { millisToEnd = (59999 - millisecondsInMinute.count()) % 7500 - 50; }   //7.5sec slot
+	//if (WSJTX_TXmodeStr == "FT4") { millisToEnd = (59999 - millisecondsInMinute.count()) % 7500 - 50; }   //7.5sec slot
 	//if (WSJTX_TXmodeStr == "FT2") { millisToEnd = (59999 - millisecondsInMinute.count()) % 3750 - 25 + RTCdelay; }   //3.75sec slot
+	if (WSJTX_TXmodeStr == "FT4") { millisToEnd = (7500 - (GetCurrentTimeMs() + RTCdelay) % 7500 - 50); }   //7.5sec slot
 
 	//calc millisToEnd of the world UTC
 	if (WSJTX_TXmodeStr == "FT2") { millisToEnd = (3750 - (GetCurrentTimeMs() + RTCdelay) % 3750); }   //3.75sec slot

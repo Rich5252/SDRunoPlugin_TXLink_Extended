@@ -247,7 +247,8 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
             waitCount = 0;                              // Reset wait count on successful receive
 			std::string strPacketType = ProcessPacket(message, message_len);
 			uint64_t ms = GetCurrentTimeMs();
-			string str1 = get_millis() + "UDP packet : " + strPacketType + " " + FormatUtcTime(ms) + " DTC: " + to_string(ms % 3750) + "\r\n";
+            int slotPeriod = WSJTX_TXmodeStr == "FT2" ? 3750 : (WSJTX_TXmodeStr == "FT4" ? 7500 : 15000);
+			string str1 = get_millis() + "UDP packet : " + strPacketType + " " + FormatUtcTime(ms) + " DTC: " + to_string(ms % slotPeriod) + "\r\n";
 			std::cout <<  str1;
         
         }
@@ -265,13 +266,14 @@ void PreemptiveTXCheck()
 {
 
     uint64_t ms = GetCurrentTimeMs();
-	int SlotNumber = ms % 60000 / 3750;                     //current slot number in minute (0-15)
-	int TimeInSlot = ms % 3750;
-	int TimeToNextSlot = 3750 - TimeInSlot;
-	bool inTxSlot = (((ms / 3750) % 2) == 0) == TXeven;   //true if we are in the TX slot for the current even/odd setting
+    int slotPeriod = WSJTX_TXmodeStr == "FT2" ? 3750 : (WSJTX_TXmodeStr == "FT4" ? 7500 : 15000);
+	int SlotNumber = ms % 60000 / slotPeriod;                     //current slot number in minute (0-15)
+	int TimeInSlot = ms % slotPeriod;
+	int TimeToNextSlot = slotPeriod - TimeInSlot;
+	bool inTxSlot = (((ms / slotPeriod) % 2) == 0) == TXeven;   //true if we are in the TX slot for the current even/odd setting
 
 	// Preemptive TX start for FT2 - start in previous slot if enabled and not already preempted
-    if (WSJTX_TXmodeStr == "FT2" && strDecodeMsg != "TUNE" && TXenabled && !inTxSlot && TimeToNextSlot < (RTCdelay) && !TXpreempted)   //note we start TX in previous slot
+    if ((WSJTX_TXmodeStr == "FT2" || WSJTX_TXmodeStr == "FT4") && strDecodeMsg != "TUNE" && TXenabled && !inTxSlot && TimeToNextSlot < (RTCdelay) && !TXpreempted)   //note we start TX in previous slot
     {                                   //expeimental - tx early cf PC RTC since PC clock delayed for SDR etc
         //should wait for any current UDP event to complete in Form
         int sleeps = 0;
@@ -282,7 +284,7 @@ void PreemptiveTXCheck()
         }
         PreemptiveTXstartMs = GetCurrentTimeMs();
 		string str1 = ( TXeven ? " TX even. " : " TX odd. " );
-        string str2 = "\r\n" + get_millis() + "Preemptive TX: " + FormatUtcTime(PreemptiveTXstartMs) + " Slot: " + to_string(SlotNumber) + " DTC: " + to_string(PreemptiveTXstartMs % 3750) + str1 + "RTCdelay: " + to_string(RTCdelay) + "\r\n";
+        string str2 = "\r\n" + get_millis() + "Preemptive TX: " + FormatUtcTime(PreemptiveTXstartMs) + " Slot: " + to_string(SlotNumber) + " DTC: " + to_string(PreemptiveTXstartMs % slotPeriod) + str1 + "RTCdelay: " + to_string(RTCdelay) + "\r\n";
         std::cout << str2;
         TXpreempted = true;      //indicates when Preempted TX has started. Reset when next packet received (checking correct slot)
         TXflg = true;            //force TX now
@@ -360,11 +362,12 @@ std::string ProcessPacket(char * message, int message_len)
 		RxDF = StatusPacket.RxDF;       //receive freq offset
 
         //special handling for the Preemptive TX, remember tx period
+		int slotPeriod = WSJTX_TXmodeStr == "FT2" ? 3750 : (WSJTX_TXmodeStr == "FT4" ? 7500 : 15000);
 		TXenabled = StatusPacket.TxEnabled;
         if (TXenabled)
         {
 			uint64_t ms = GetCurrentTimeMs();
-            int DTC = ms % 3750;
+            int DTC = ms % slotPeriod;
             if (TXpreempted && (ms - PreemptiveTXstartMs) < 1000 && !StatusPacket.Transmitting)
                        // We are in the slot following preemptive TX but wsjtx says not TX so must mean slot was wrong
                         // so do a halt TX
@@ -375,8 +378,8 @@ std::string ProcessPacket(char * message, int message_len)
 				std::cout << str1;
             }
 
-			bool even = (ms / 3750) % 2 == 0;
-			int SlotTimeLeft = 3750 - DTC;
+			bool even = (ms / slotPeriod) % 2 == 0;
+			int SlotTimeLeft = slotPeriod - DTC;
             if (StatusPacket.Transmitting)   TXeven = even;              //can only be certain when wsjtx is tx'ing
             if (!msgChanged && !StatusPacket.Transmitting && TXenabled && SlotTimeLeft > 3000) TXeven = !even;
 			string str1 = dataChanged ? " Data changed. " : " Data unchanged. ";
@@ -384,7 +387,7 @@ std::string ProcessPacket(char * message, int message_len)
 			string str3 = TXeven ? " TXslot Even " : " TXslot Odd ";
 			string str4 = StatusPacket.Transmitting ? " Transmitting. " : " Not transmitting. ";
 			string str5 = TXenabled ? " TXenabled. " : " TXdisabled. ";
-            std::cout << get_millis() << str1 << str2 << str5 << str3 << str4 << " Slot: " << (ms % 60000) / 3750  << " SlotTimeLeft: " << SlotTimeLeft << std::endl;
+            std::cout << get_millis() << str1 << str2 << str5 << str3 << str4 << " Slot: " << (ms % 60000) / slotPeriod << " SlotTimeLeft: " << SlotTimeLeft << std::endl;
         }
         if (StatusPacket.Transmitting)  TXpreempted = false;            //reset preemptive flag when actual TX starts
 
