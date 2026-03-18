@@ -1889,29 +1889,11 @@ void SDRunoPlugin_TXLinkForm::SettingsDialog_Closed()
 
 
 long SDRunoPlugin_TXLinkForm::millisToEnd() {
-	//compute remaining milliseconds to end of FT8             TX period
-	// Get the current time point
-	auto currentTime = std::chrono::system_clock::now();
 
-	// Extract seconds and fractional seconds since last minute
-	auto seconds = std::chrono::time_point_cast<std::chrono::minutes>(currentTime);
-	auto fraction = currentTime - seconds;
-
-	// Calculate the milliseconds since the start of the current minute
-	auto millisecondsInMinute = std::chrono::duration_cast<std::chrono::milliseconds>(fraction);
-
-	// Print the milliseconds since the start of the current minute
-	//std::cout << "Milliseconds since the start of the current minute: " << millisecondsInMinute.count() << std::endl;
-
-	long millisToEnd = (59999 - millisecondsInMinute.count()) % 15000 - 170;			//remaining millisecs in 15 sec slot
-	//if (WSJTX_TXmodeStr == "FT4") { millisToEnd = (59999 - millisecondsInMinute.count()) % 7500 - 50; }   //7.5sec slot
-	//if (WSJTX_TXmodeStr == "FT2") { millisToEnd = (59999 - millisecondsInMinute.count()) % 3750 - 25 + RTCdelay; }   //3.75sec slot
+	//calc millis to end of this period relative to world UTC
+	long millisToEnd = (15000 - (GetCurrentTimeMs() + RTCdelay) % 15000 - 150);								//FT8 15sec slot
 	if (WSJTX_TXmodeStr == "FT4") { millisToEnd = (7500 - (GetCurrentTimeMs() + RTCdelay) % 7500 - 50); }   //7.5sec slot
-
-	//calc millisToEnd of the world UTC
-	if (WSJTX_TXmodeStr == "FT2") { millisToEnd = (3750 - (GetCurrentTimeMs() + RTCdelay) % 3750); }   //3.75sec slot
-
-	//TXtempLbl.caption(to_string(millisToEnd));
+	if (WSJTX_TXmodeStr == "FT2") { millisToEnd = (3750 - (GetCurrentTimeMs() + RTCdelay) % 3750); }		//3.75sec slot
 
 	return millisToEnd;
 }

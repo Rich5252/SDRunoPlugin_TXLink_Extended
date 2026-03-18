@@ -246,6 +246,8 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
 
             waitCount = 0;                              // Reset wait count on successful receive
 			std::string strPacketType = ProcessPacket(message, message_len);
+
+			//diagnostic output
 			uint64_t ms = GetCurrentTimeMs();
             int slotPeriod = WSJTX_TXmodeStr == "FT2" ? 3750 : (WSJTX_TXmodeStr == "FT4" ? 7500 : 15000);
 			string str1 = get_millis() + "UDP packet : " + strPacketType + " " + FormatUtcTime(ms) + " DTC: " + to_string(ms % slotPeriod) + "\r\n";
@@ -272,8 +274,8 @@ void PreemptiveTXCheck()
 	int TimeToNextSlot = slotPeriod - TimeInSlot;
 	bool inTxSlot = (((ms / slotPeriod) % 2) == 0) == TXeven;   //true if we are in the TX slot for the current even/odd setting
 
-	// Preemptive TX start for FT2 - start in previous slot if enabled and not already preempted
-    if ((WSJTX_TXmodeStr == "FT2" || WSJTX_TXmodeStr == "FT4") && strDecodeMsg != "TUNE" && TXenabled && !inTxSlot && TimeToNextSlot < (RTCdelay) && !TXpreempted)   //note we start TX in previous slot
+	// Preemptive TX start - start in previous slot if enabled and not already preempted
+    if (strDecodeMsg != "TUNE" && TXenabled && !inTxSlot && TimeToNextSlot < (RTCdelay) && !TXpreempted)   //note we start TX in previous slot
     {                                   //expeimental - tx early cf PC RTC since PC clock delayed for SDR etc
         //should wait for any current UDP event to complete in Form
         int sleeps = 0;
