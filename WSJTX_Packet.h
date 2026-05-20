@@ -130,12 +130,14 @@ public:
         return data;
     }
 
+
     std::string getDefaultTxMessage() {
         int32_t strLength = packet.size();
-        if (strLength > 0) {
+        if (strLength > index + 24) {
+			if (strLength > index + 24 + 32) { strLength = index + 24 + 32; } // sanity check to prevent reading beyond packet
             std::string stringRead(packet.begin() + index + 24, packet.begin() + strLength);
             index += strLength;
-            return stringRead;
+			return stringRead + '\0';
         }
         return "";
     }
@@ -242,7 +244,12 @@ public:
     bool TxWatchdog;
     std::string Submode;
     bool Fastmode;
+    uint8_t specialOpMode;
+    uint32_t freqTolerance;
+    uint32_t trPeriod;
+    std::string configName;
     std::string DefaultTXMessage;
+    std::string txSymbols;
 
     WSJTX_Status(const std::vector<uint8_t>& pkt, int idx) : WSJTX_Packet(pkt, idx) {
         Frequency = 0;
@@ -252,8 +259,14 @@ public:
         RxDF = 0;
         TxDF = 0;
         TxWatchdog = false;
+        Submode = "";
         Fastmode = false;
+        specialOpMode = 0;
+        freqTolerance = 0;
+        trPeriod = 0;
+        configName = "";
         DefaultTXMessage = "";
+        txSymbols = "";
     }
 
     void Decode() {
@@ -276,7 +289,16 @@ public:
         TxWatchdog = getBool();
         Submode = readutf8();
         Fastmode = getBool();
-        DefaultTXMessage = getDefaultTxMessage();
+        specialOpMode = getByte();
+        freqTolerance = getuInt32();
+        trPeriod = getuInt32();
+        configName = readutf8();
+
+        // 1. Get your TX Message string safely via the proper length prefix
+        DefaultTXMessage = readutf8();
+
+        //symbol list
+        txSymbols = readutf8();
     }
 };
 

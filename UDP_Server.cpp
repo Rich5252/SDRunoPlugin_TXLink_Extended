@@ -319,6 +319,9 @@ std::string ProcessPacket(char * message, int message_len)
 
         std::string msg = StatusPacket.DefaultTXMessage;
         msg = removeTrailingSpaces(msg);
+
+        std::cout << "\n" << get_millis() << "DefaultTXMessage = " << '"' <<StatusPacket.DefaultTXMessage << '"' << std::endl;
+
 		if (msg == "") { msg = "CQ G4AHN IO91"; }                           //default message if empty
 
 		
@@ -471,7 +474,7 @@ std::string removeTrailingSpaces(std::string str) {
 
 
 std::string EncodeMessage(const std::string& WSJTX_TXmodeStr, const std::string& strMessage) {
-    std::cout << get_millis() << "EncodeMessage start: " << WSJTX_TXmodeStr << " " << strMessage << std::endl;
+    std::cout << get_millis() << "EncodeMessage mode: " << WSJTX_TXmodeStr << " msg: " << strMessage << std::endl;
 
     const std::string ft8Path = strFT8WSJTXpath;
     const std::string ft4Path = strFT4WSJTXpath;
