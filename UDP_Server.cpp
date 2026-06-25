@@ -266,6 +266,7 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
 
 void PreemptiveTXCheck()
 {
+	if (RTCdelay <= 50) { return; }     //if delay is minimal dont preempt - allow wsjtx to control (so can introduce longer delays)
 
     uint64_t ms = GetCurrentTimeMs();
     int slotPeriod = WSJTX_TXmodeStr == "FT2" ? 3750 : (WSJTX_TXmodeStr == "FT4" ? 7500 : 15000);
