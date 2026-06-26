@@ -901,8 +901,8 @@ void SDRunoPlugin_TXLinkForm::ProcessIncomingSerial()
 	{
 		if (std::chrono::steady_clock::now() - startTime > maxDuration)
 		{
-			std::cout << get_millis() << " ProcessIncomingSerial: time budget exceeded, "
-				<< "deferring remaining data to next tick." << std::endl;
+			std::cout << std::endl << get_millis() << " ProcessIncomingSerial: time budget exceeded, "
+				<< "defer to next tick. NewMsg = \"" << NewMsg << "\"" << std::endl << std::endl;
 			break;
 		}
 
@@ -988,8 +988,8 @@ void SDRunoPlugin_TXLinkForm::ProcessIncomingSerial()
 			NewMsg.append(NextChar);
 			if (NewMsg.length() > MAX_MSG_LEN)
 			{
-				std::cout << get_millis() << " ProcessIncomingSerial: message exceeded max length, discarding (possible noise/desync): \""
-					<< NewMsg.substr(0, 20) << "...\"" << std::endl;
+				std::cout << std::endl << get_millis() << " ProcessIncomingSerial: message exceeded max length, discarding (possible noise/desync): \""
+					<< NewMsg.substr(0, 20) << "...\"" << std::endl << std::endl;
 				NewMsg = "";
 			}
 		}
