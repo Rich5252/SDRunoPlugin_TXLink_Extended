@@ -8,6 +8,7 @@
 #include "SDRunoPlugin_TXLink.h"
 #include "SDRunoPlugin_TXLinkUi.h"
 #include "SDRunoPlugin_TXLinkForm.h"
+#include "Heartbeat.h"
 
 
 //TXlink plugin for SDRuno app. The plugin code is based on the SDRuno plugin template example.
@@ -101,6 +102,13 @@ SDRunoPlugin_TXLink::~SDRunoPlugin_TXLink()
 		DXspiderThread->join(); // Wait for the thread to finish
 		std::cout << get_millis() << " DXspider Thread Joined and exit" << std::endl;
 	}
+
+	if (WatchdogThread->joinable()) {
+		WatchdogExitRequest = true;
+		std::cout << get_millis() << " Watchdog Exit Requested" << std::endl;
+		WatchdogThread->join();
+		std::cout << get_millis() << " Watchdog Thread Joined and exit" << std::endl;
+	}
 }
 
 void SDRunoPlugin_TXLink::StartTXLinkUi()
@@ -151,6 +159,10 @@ void SDRunoPlugin_TXLink::StartTXLinkUi()
 				UDP_Server_Loop(controller, *this);
 				})
 		);
+	}
+
+	if (!WatchdogThread) {
+		WatchdogThread.reset(new std::thread(Watchdog_Loop, std::ref(WatchdogExitRequest)));
 	}
 
 	StartAnnotator();

@@ -14,6 +14,7 @@
 #include "RTTY_Server.h"
 #include "DXspiderClient.h"
 #include "FindWindowTitleRoot.h"
+#include "Heartbeat.h"
 
 #include <io.h>
 #include <shlobj.h>
@@ -652,6 +653,7 @@ void SDRunoPlugin_TXLinkForm::SetStandbyMode(bool Mode)
 
 void SDRunoPlugin_TXLinkForm::OnTimer()
 {
+	g_formHeartbeatMs.store(now_ms(), std::memory_order_relaxed);
 	m_timerCount++;
 	static bool busy = false;
 	if (busy) {

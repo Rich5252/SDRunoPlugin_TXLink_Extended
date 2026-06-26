@@ -134,6 +134,7 @@
   <ItemGroup>
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="DXspiderClient.cpp" />
+    <ClCompile Include="HeartBeat.cpp" />
     <ClCompile Include="MessageBox.cpp" />
     <ClCompile Include="NamedPipeServer.cpp" />
     <ClCompile Include="SDRunoPlugin_TXLink.cpp" />
@@ -157,6 +158,7 @@
     <ClInclude Include="DXspiderClient.h" />
     <ClInclude Include="FindWindowTitleRoot.h" />
     <ClInclude Include="Console.h" />
+    <ClInclude Include="Heartbeat.h" />
     <ClInclude Include="RealTimeClock_Utils.h" />
     <ClInclude Include="UDP_Type17.h" />
     <ClInclude Include="MessageQueue.h" />

@@ -80,6 +80,10 @@ public:
 	void StopTXLinkUi();			// New public method to shutdown m_Ui
 
 
+	std::atomic<bool> WatchdogExitRequest{ false };   // member, same pattern as UDPExitRequest etc.
+	std::unique_ptr<std::thread> WatchdogThread;
+
+
 private:
 	void WorkerFunction();
 	std::thread* m_worker;
