@@ -695,7 +695,7 @@ void SDRunoPlugin_TXLinkForm::OnTimer()
 		return;										//skip the rest of the code in this elapse function if UnloadInProgress
 	}
 
-	CheckWindowState();					//check if main SDRuno window minimized or restored
+	TIME_STEP("CheckWindowState", CheckWindowState());					//check if main SDRuno window minimized or restored
 
 	//update TX Freq control
 	string strTXfreq = std::to_string((int64_t)CurrentTXfreq);
@@ -712,12 +712,12 @@ void SDRunoPlugin_TXLinkForm::OnTimer()
 	bRITchkbox = RITchkbox.checked();		//get RIT checkbox state
 	bOFSchkbox = OFSchkbox.checked();
 
-	DrainFreqQueue();	//process any new freq changes from SDRuno
+	TIME_STEP("DrainFreqQueue", DrainFreqQueue());	//process any new freq changes from SDRuno
 
-	ProcessMessageQueue();					//process any external messages in the queue
+	TIME_STEP("ProcessMessageQueue", ProcessMessageQueue());					//process any external messages in the queue
 
 	// look for incoming serial and UDP on timer event
-	ProcessIncomingSerial();
+	TIME_STEP("ProcessIncomingSerial", ProcessIncomingSerial());
 	//ProcessUDPEvent();						//now triggered by separate udp_poller timer
 
 	busy = false;
@@ -893,8 +893,19 @@ void SDRunoPlugin_TXLinkForm::ProcessIncomingSerial()
 	static bool VRX0mute = false;
 	static bool VRX1mute = true;
 
+	auto startTime = std::chrono::steady_clock::now();
+	const auto maxDuration = std::chrono::milliseconds(20);  // tune as needed
+	const size_t MAX_MSG_LEN = 64;   // generous given your ~30-byte normal messages
+
 	while (Serial.DataAvailable() > 0)
 	{
+		if (std::chrono::steady_clock::now() - startTime > maxDuration)
+		{
+			std::cout << get_millis() << " ProcessIncomingSerial: time budget exceeded, "
+				<< "deferring remaining data to next tick." << std::endl;
+			break;
+		}
+
 		NextChar = Serial.ReadSerialPortChar();
 		//valid read
 		if (NextChar == "{")
@@ -975,6 +986,12 @@ void SDRunoPlugin_TXLinkForm::ProcessIncomingSerial()
 		else
 		{
 			NewMsg.append(NextChar);
+			if (NewMsg.length() > MAX_MSG_LEN)
+			{
+				std::cout << get_millis() << " ProcessIncomingSerial: message exceeded max length, discarding (possible noise/desync): \""
+					<< NewMsg.substr(0, 20) << "...\"" << std::endl;
+				NewMsg = "";
+			}
 		}
 		NextChar = "";
 	}
