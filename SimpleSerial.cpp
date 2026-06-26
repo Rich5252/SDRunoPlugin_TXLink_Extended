@@ -84,20 +84,24 @@ int32_t SimpleSerial::DataAvailable() {
 
 string SimpleSerial::ReadSerialPortChar()
 {
-	OVERLAPPED overlapped = { 0 };
-	DWORD bytes_read;
+	DWORD bytes_read = 0;
 	char inc_msg[1];
-	string complete_inc_msg = "";
 
 	if (ReadFile(Serial_HANDLE, inc_msg, 1, &bytes_read, NULL))
 	{
-		return complete_inc_msg.append(inc_msg, 1);
+		if (bytes_read > 0) {
+			return string(inc_msg, 1);
+		}
+		return "";   // timed out waiting for a byte - not an error, nothing arrived yet
 	}
 	else
 	{
+		std::cout << get_millis() << " SimpleSerial::ReadSerialPortChar() ReadFile FAILED on "
+			<< com_port_ << ", GetLastError=" << GetLastError() << std::endl;
+		connected_ = false;
 		ClearComm();
 		return "";
-	}	
+	}
 }
 
 string SimpleSerial::ReadSerialPortCharAsync()
@@ -304,6 +308,17 @@ void SimpleSerial::CreateSerialPort(const std::string com_port, DWORD COM_BAUD_R
 			if (!SetCommState(Serial_HANDLE, &dcbSerialParams))
 				std::cout << "Warning: could not set serial port params " << com_port << std::endl;
 			else {
+				// NEW: set read/write timeouts so ReadFile can never block forever.
+				COMMTIMEOUTS timeouts = { 0 };
+				timeouts.ReadIntervalTimeout = 50;          // max gap between bytes within one read
+				timeouts.ReadTotalTimeoutConstant = 50;     // overall cap per ReadFile call (ms)
+				timeouts.ReadTotalTimeoutMultiplier = 0;
+				timeouts.WriteTotalTimeoutConstant = 50;
+				timeouts.WriteTotalTimeoutMultiplier = 10;
+
+				if (!SetCommTimeouts(Serial_HANDLE, &timeouts))
+					std::cout << get_millis() << "Warning: could not set comm timeouts " << com_port << std::endl;
+
 				connected_ = true;
 				PurgeComm(Serial_HANDLE, PURGE_RXCLEAR | PURGE_TXCLEAR);
 				std::cout << get_millis() << "SimpleSerial: successfully opened or reopened " << com_port << std::endl;
