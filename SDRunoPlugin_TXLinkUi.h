@@ -24,6 +24,7 @@ nana::detail::bedrock& get_bedrock_instance();
 #include "UDP_Server.h"
 
 #define WM_UDP_DATA_READY (WM_USER + 1)
+#define WM_FREQ_DATA_READY (WM_USER + 2)
 
 // Forward reference
 class SDRunoPlugin_TXLink;
@@ -35,7 +36,7 @@ public:
 	SDRunoPlugin_TXLinkUi(SDRunoPlugin_TXLink& parent, IUnoPluginController& controller);
 	~SDRunoPlugin_TXLinkUi();
 
-	void HandleEvent(const UnoEvent& evt);
+	void UiHandleEvent(const UnoEvent& evt);
 	void RequestDllUnload();
 
 	void StartFormThread();			//starts the form thread if not already started
@@ -72,7 +73,6 @@ private:
 
 	IUnoPluginController & m_controller;
 
-	
 	std::future<void> m_exitFuture;
 
 	std::string UnoEventTypeToString(UnoEvent::UnoEventType eventType);

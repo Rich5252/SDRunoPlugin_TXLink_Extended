@@ -84,6 +84,9 @@ public:
 	string DigiTXmodeStr = "FT8";
 	
 	bool SendSerialMsg(const std::string& msg);			//thread safe way of sending messages from other processes or threads
+
+
+	void QueueFrequencyChanged(double freq0, double freq1);   // callable from any thread
 	
 	nana::timer udp_poller;
 
@@ -93,14 +96,22 @@ private:
 	DWORD COM_BAUD_RATE = CBR_115200;
 	SimpleSerial Serial;
 
+	//serial and special requests into Form from other threads or processes
 	std::queue<std::string> m_messageQueue;
 	std::mutex m_queueMutex;
 	bool _SendSerialMsg(string Msg); //local function to send serial messages frm msg queue
+
+	//Frequency change requests into Form from other threads or processes
+	struct FreqChangeRequest { double freq0; double freq1; };
+	std::queue<FreqChangeRequest> m_freqQueue;
+	std::mutex m_freqQueueMutex;
+	void ProcessFrequencyChanged(double freq0, double freq1); // Nana-thread only, called from OnTimer
 
 	void OnTimer();
 	void ProcessMessageQueue();
 	void CheckWindowState();
 	void ProcessIncomingSerial();
+	void DrainFreqQueue();
 	void ProcessUDPEvent();
 	void ReTransmit();
 	std::string ProcessRTTYcommand(std::string rttyCmdText);

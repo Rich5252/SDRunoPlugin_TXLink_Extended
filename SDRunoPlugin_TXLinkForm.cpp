@@ -710,6 +710,8 @@ void SDRunoPlugin_TXLinkForm::OnTimer()
 	bRITchkbox = RITchkbox.checked();		//get RIT checkbox state
 	bOFSchkbox = OFSchkbox.checked();
 
+	DrainFreqQueue();	//process any new freq changes from SDRuno
+
 	ProcessMessageQueue();					//process any external messages in the queue
 
 	// look for incoming serial and UDP on timer event
@@ -790,6 +792,90 @@ void SDRunoPlugin_TXLinkForm::ProcessMessageQueue()
 
 			// Send serial message string to Arduino
 			_SendSerialMsg(message);
+		}
+	}
+}
+
+// Process frequency changes from SDRuno thread (via HandleEvent() in SDRunoPlugin_TXLink.cpp)
+void SDRunoPlugin_TXLinkForm::QueueFrequencyChanged(double freq0, double freq1)
+{
+	std::lock_guard<std::mutex> lock(m_freqQueueMutex);
+	m_freqQueue.push({ freq0, freq1 });
+}
+
+
+// Called from OnTimer(), same place ProcessMessageQueue() is called
+void SDRunoPlugin_TXLinkForm::DrainFreqQueue()
+{
+	std::queue<FreqChangeRequest> local;
+	{
+		std::lock_guard<std::mutex> lock(m_freqQueueMutex);
+		std::swap(local, m_freqQueue);
+	}
+	while (!local.empty())
+	{
+		ProcessFrequencyChanged(local.front().freq0, local.front().freq1);
+		local.pop();
+	}
+}
+
+// Called only from the Nana thread (e.g. from your existing window-proc hook
+// that already handles WM_UDP_DATA_READY, or from a nana::timer tick).
+void SDRunoPlugin_TXLinkForm::ProcessFrequencyChanged(double freq0, double freq1)
+{
+	// All the logic that used to live in UiHandleEvent's FrequencyChanged case
+	// moves here. It's now safe to touch m_form->... directly because we're
+	// guaranteed to be on the form's own thread.
+
+	static double lastF0 = 0;
+	static double lastF1 = 0;
+	static double OFStxFreq = 0;
+
+	bool bF0changed = (uint32_t)freq0 != (uint32_t)lastF0;
+	if (bF0changed) lastF0 = freq0;
+
+	bool bF1changed = (uint32_t)freq1 != (uint32_t)lastF1;
+	if (bF1changed) lastF1 = freq1;
+
+	if (!bOFSchkbox) OFStxFreq = 0;
+	if (bOFSchkbox && bF1changed) { OFStxFreq = freq1 - freq0; }
+
+	if (!bF0changed && !bF1changed) return;
+
+	if (freq0 != 0 && freq0 != CurrentRXfreq && SplitMode != SplitFT8)
+	{
+		CurrentRXfreq = freq0;
+		m_parent._updateRX_AnnoEntry("RX", "", (int64_t)CurrentRXfreq);
+	}
+
+	if (SplitMode == SplitNone && bF1changed)
+	{
+		m_controller.SetVfoFrequency(1, freq0);
+	}
+	else if (SplitMode == SplitNone && bF0changed)
+	{
+		SendSerialMsg("$SendRXfreq$");
+	}
+	else if (SplitMode == SplitFT8)
+	{
+		if (freq0 != CurrentTXfreq)
+		{
+			m_controller.SetVfoFrequency(0, CurrentTXfreq);
+		}
+	}
+	else
+	{
+		if (freq1 > 0 && SplitMode != SplitFT8)
+		{
+			if (bOFSchkbox) {
+				freq1 = freq0 + OFStxFreq;
+				m_controller.SetVfoFrequency(1, freq1);
+			}
+			if (freq1 != CurrentTXfreq)
+			{
+				CurrentTXfreq = freq1;
+				SendSerialMsg("$SendTXfreq$");
+			}
 		}
 	}
 }

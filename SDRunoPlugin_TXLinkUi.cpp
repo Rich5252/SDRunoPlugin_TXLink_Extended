@@ -134,10 +134,10 @@ void SDRunoPlugin_TXLinkUi::_updateRX_AnnoEntry(std::string tag, std::string tim
 
 // Handle events from SDRuno
 // TODO: code what to do when receiving relevant events
-void SDRunoPlugin_TXLinkUi::HandleEvent(const UnoEvent& ev)
+void SDRunoPlugin_TXLinkUi::UiHandleEvent(const UnoEvent& ev)
 {
 	if (ev.GetType() != UnoEvent::SavingWorkspace && ev.GetType() != UnoEvent::FrequencyChanged && ev.GetType() != UnoEvent::ClosingDown) { return; } //ignore other events
-	std::cout << get_millis() << "SDRunoPlugin_TXLinkUi::HandleEvent called " << UnoEventTypeToString(ev.GetType()) << std::endl;
+	std::cout << get_millis() << "SDRunoPlugin_TXLinkUi::UiHandleEvent called " << UnoEventTypeToString(ev.GetType()) << std::endl;
 	
 	//std::lock_guard<std::mutex> lock(m_lock);
 
@@ -157,81 +157,13 @@ void SDRunoPlugin_TXLinkUi::HandleEvent(const UnoEvent& ev)
 		break;
 
 	case UnoEvent::FrequencyChanged:
-		//m_lock.lock();						//avoid iterative changes caused by RX/TX swaps etc (caused exceptions at startup)
-
-		if (bBusy) { std::cout << "FrequencyChanged re-entry while processing previous event **************************"; }
-		//while (bBusy) {};
-		bBusy = true;
-
 		freq0 = m_controller.GetVfoFrequency(0);
-		bF0changed = false;
-		if ((uint32_t)freq0 != (uint32_t)lastF0) { bF0changed = true; lastF0 = freq0; }
-
 		freq1 = m_controller.GetVfoFrequency(1);
-		bF1changed = false;
-		if ((uint32_t)freq1 != (uint32_t)lastF1) { bF1changed = true; lastF1 = freq1; }
-
-		if (!m_form->bOFSchkbox) OFStxFreq = 0;									//if OFS disabled then reset to 0 so no offset applied			
-		if (m_form->bOFSchkbox && bF1changed) { OFStxFreq = freq1 - freq0; }	//tx OFS changes when F1 (TX) freq changes
-
-		std::cout << "F Event " << (uint32_t)freq0 << " " << (uint32_t)freq1 << " "  << m_form->SplitMode << std::endl;
-
-		if (!bF0changed && !bF1changed)
-		{
-			std::cout << "F Dupe" << (uint32_t)freq0 << " " << (uint32_t)freq1 << std::endl;
-			//ignore it
-			bBusy = false;
-			break;
-		}
-
-		if (freq0 != 0 && freq0 != m_form->CurrentRXfreq && m_form->SplitMode != m_form->SplitFT8)
-		{
-			m_form->CurrentRXfreq = freq0;
-			_updateRX_AnnoEntry("RX", "", (int64_t)m_form->CurrentRXfreq);		// needed here in case of split TX/RX when new TX not sent
-		}
-		if (m_form->SplitMode == m_form->SplitNone && bF1changed) //F1 should = F0 so force it back
-		{
-			std::cout << "Revert vfo1 " << (int64_t)freq0 << std::endl;
-			m_controller.SetVfoFrequency(1, freq0);						//because thread locked this will not occur until scope exit
-		}
-		else if (m_form->SplitMode == m_form->SplitNone && bF0changed)
-		{
-			m_form->SendSerialMsg("$SendRXfreq$");			// special Msg to execute SendRXfrq()
-															// which sends to TX
-		}
-		else if (m_form->SplitMode == m_form->SplitFT8)
-		{
-			//in SplitFT8 the tx freq base is fixed so force VRX0 back to it (this forces a change back to SplitNone by user
-			// before tx freq can be changed and hence avoids trying to TX on wrong freq)
-			if (freq0 != m_form->CurrentTXfreq)
-			{
-				m_controller.SetVfoFrequency(0, m_form->CurrentTXfreq);
-			}
-		}
-		else
-		{
-			//split TX freq so update TX with VRX1 if changed (unless in FT8 mode when no change)
-			//double freq = m_controller.GetVfoFrequency(1);
-			if (freq1 > 0 && m_form->SplitMode != m_form->SplitFT8)			// freq is 0 if vrx1 not installed
-			{
-				if (m_form->bOFSchkbox) {		//if OFS enabled then apply offset to vrx1 freq to get tx freq
-					freq1 = freq0 + OFStxFreq;
-					m_controller.SetVfoFrequency(1, freq1);
-				}
-				if (freq1 != m_form->CurrentTXfreq)
-				{
-					m_form->CurrentTXfreq = freq1;							//TX is set by vrx1
-					m_form->SendSerialMsg("$SendTXfreq$");					// special Msg to execute SendTXfrq(). only update TX frq in this case
-				}
-			}
-		}
-		bBusy = false;
-
-		//m_lock.unlock();
+		m_form->QueueFrequencyChanged(freq0, freq1);   // no other m_form or m_controller access here
 		break;
 
 	case UnoEvent::ClosingDown:
-		std::cout << get_millis() << "SDRunoPlugin_TXLinkUi::HandleEvent ClosingDown called" << std::endl;
+		std::cout << get_millis() << "SDRunoPlugin_TXLinkUi::UiHandleEvent ClosingDown called" << std::endl;
 		RequestDllUnload();							//request unload of plugin from controller
 													//   this will cause TXLink top level to be destroyed
 													//   which generates a consitent shutdown sequence
@@ -241,6 +173,7 @@ void SDRunoPlugin_TXLinkUi::HandleEvent(const UnoEvent& ev)
 		break;
 	}
 }
+
 
 // Required to make sure the
 //  plugin is correctly unloaded when closed

@@ -210,7 +210,7 @@ void SDRunoPlugin_TXLink::HandleEvent(const UnoEvent& ev)
 	// 3. Forward Event: Only forward events if the UI object exists.
 	if (m_Ui) {
 		//std::cout << get_millis() << " SDRunoPlugin_TXLink::HandleEvent: Forwarding event to UI.  ev = "  << ev.ToString() << std::endl;
-		m_Ui->HandleEvent(ev);
+		m_Ui->UiHandleEvent(ev);
 	}
 
 	bBusy = false;
