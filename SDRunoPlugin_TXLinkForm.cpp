@@ -890,6 +890,7 @@ void SDRunoPlugin_TXLinkForm::ProcessIncomingSerial()
 
 	string NextChar = "";
 	string NewMsg = "";
+	string LastMsg = "";
 	static bool VRX0mute = false;
 	static bool VRX1mute = true;
 
@@ -902,7 +903,7 @@ void SDRunoPlugin_TXLinkForm::ProcessIncomingSerial()
 		if (std::chrono::steady_clock::now() - startTime > maxDuration)
 		{
 			std::cout << std::endl << get_millis() << " ProcessIncomingSerial: time budget exceeded, "
-				<< "defer to next tick. NewMsg = \"" << NewMsg << "\"" << std::endl << std::endl;
+				<< "defer to next tick. LastMsg = \"" << LastMsg << "\"" << std::endl << std::endl;
 			break;
 		}
 
@@ -911,6 +912,7 @@ void SDRunoPlugin_TXLinkForm::ProcessIncomingSerial()
 		if (NextChar == "{")
 		{
 			NewMsg = "";
+			LastMsg = "";
 		}
 		else if (NextChar == "}")
 		{
@@ -981,6 +983,7 @@ void SDRunoPlugin_TXLinkForm::ProcessIncomingSerial()
 				StandbyMode = true;
 				TXtempLbl.fgcolor(nana::colors::red);
 			}
+			LastMsg = NewMsg;
 			NewMsg = "";		//message completed
 		}
 		else
