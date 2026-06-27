@@ -290,6 +290,8 @@ void PreemptiveTXCheck()
         string str2 = "\r\n" + get_millis() + "Preemptive TX: " + FormatUtcTime(PreemptiveTXstartMs) + " Slot: " + to_string(SlotNumber) + " DTC: " + to_string(PreemptiveTXstartMs % slotPeriod) + str1 + "RTCdelay: " + to_string(RTCdelay) + "\r\n";
         std::cout << str2;
         TXpreempted = true;      //indicates when Preempted TX has started. Reset when next packet received (checking correct slot)
+
+        std::lock_guard<std::mutex> lock(UDPEvent_mtx);
         TXflg = true;            //force TX now
         UDPevent = true;         //flag for main UDP server code to update Arduino - avoid handshake race
     }
@@ -310,6 +312,8 @@ std::string ProcessPacket(char * message, int message_len)
         // emit UI update signal for heartbeat if needed
     }
     else if (NewPacket.PacketType == 1) {
+        std::lock_guard<std::mutex> lock(UDPEvent_mtx);
+
 		std::string ret = "Status";
 
         //status packet contains next ft8 message and TX on/off updates

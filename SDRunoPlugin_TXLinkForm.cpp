@@ -1049,8 +1049,8 @@ void SDRunoPlugin_TXLinkForm::ProcessUDPEvent()
 {													//called from Form timer event to process wsjtx UDP	
 	//WSJT_X FT8 UDP request?
 
-	//std::lock_guard<std::mutex> lock(UDPEvent_mtx);                     // Locks the UDPEvent mutex
-	if (UDPevent)									//set from UDP thread when wsjtx message received
+	std::lock_guard<std::mutex> lock(UDPEvent_mtx);                     // Locks the UDPEvent mutex
+	if (UDPevent.exchange(false, std::memory_order_acq_rel))									//set from UDP thread when wsjtx message received
 	{
 		//following logic to handle correct mode restore on startup
 		static bool FirstTime = true;				//first time in this function so maybe ignore wsjtx for now?

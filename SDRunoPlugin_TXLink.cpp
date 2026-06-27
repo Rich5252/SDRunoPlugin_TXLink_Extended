@@ -71,7 +71,7 @@ SDRunoPlugin_TXLink::~SDRunoPlugin_TXLink()
 	StopAnnotator();
 
 	// stop UDP server thread	
-	if (UDPthread->joinable()) {
+	if (UDPthread && UDPthread->joinable()) {
 		UDPExitRequest = true;
 		std::cout << get_millis() << " UDP Exit Requested" << std::endl;
 		UDPthread->join(); // Wait for the thread to finish
@@ -79,7 +79,7 @@ SDRunoPlugin_TXLink::~SDRunoPlugin_TXLink()
 	}
 
 	// stop Tuner server thread	
-	if (TunerThread->joinable()) {
+	if (TunerThread && TunerThread->joinable()) {
 		TunerExitRequest = true;
 		std::cout << get_millis() << " Tuner Exit Requested" << std::endl;
 		TunerThread->join(); // Wait for the thread to finish
@@ -87,7 +87,7 @@ SDRunoPlugin_TXLink::~SDRunoPlugin_TXLink()
 	}
 
 	// stop RTTY server thread
-	if (RTTYThread->joinable()) {
+	if (RTTYThread && RTTYThread->joinable()) {
 		RTTYExitRequest = true;
 		std::cout << get_millis() << " RTTY Exit Requested" << std::endl;
 		RTTYThread->join(); // Wait for the thread to finish
@@ -95,7 +95,7 @@ SDRunoPlugin_TXLink::~SDRunoPlugin_TXLink()
 	}
 
 	// stop DXspider server thread
-	if (DXspiderThread->joinable()) {
+	if (DXspiderThread && DXspiderThread->joinable()) {
 		DXspider_force_close();
 		DXspiderExitRequest = true;
 		std::cout << get_millis() << " DXspider Exit Requested" << std::endl;
@@ -103,7 +103,7 @@ SDRunoPlugin_TXLink::~SDRunoPlugin_TXLink()
 		std::cout << get_millis() << " DXspider Thread Joined and exit" << std::endl;
 	}
 
-	if (WatchdogThread->joinable()) {
+	if (WatchdogThread && WatchdogThread->joinable()) {
 		WatchdogExitRequest = true;
 		std::cout << get_millis() << " Watchdog Exit Requested" << std::endl;
 		WatchdogThread->join();
@@ -186,8 +186,8 @@ void SDRunoPlugin_TXLink::HandleEvent(const UnoEvent& ev)
 {
 	//std::cout << get_millis() << " SDRunoPlugin_TXLink::HandleEvent: Event received: " << ev.ToString() << std::endl;
 
-	static bool bBusy = false;		//static so only one thread can process at a time
-	if (bBusy) {
+	static std::atomic<bool> bBusy{ false };		//static so only one thread can process at a time
+	if (bBusy.exchange(true)) {
 		std::cout << get_millis() << "SDRunoPlugin_TXLink::HandleEvent already busy *********************" << std::endl;
 		return; // Exit immediately if already busy
 	}
