@@ -573,9 +573,22 @@ void SDRunoPlugin_TXLinkForm::Setup()
 	// this next call sets the code to be executed after every interval
 	m_timer.elapse([&]
 		{
-			m_timer.stop();		//stop timer while processing to prevent re-entrancy
-			OnTimer();
-			m_timer.start();	//restart timer
+			try
+			{
+				m_timer.stop();
+				OnTimer();
+				m_timer.start();
+			}
+			catch (const std::exception& e)
+			{
+				std::cout << get_millis() << " *** OnTimer EXCEPTION: " << e.what() << std::endl;
+				m_timer.start();   // restart anyway, so we don't permanently lose the timer
+			}
+			catch (...)
+			{
+				std::cout << get_millis() << " *** OnTimer UNKNOWN EXCEPTION (non-std::exception type)" << std::endl;
+				m_timer.start();
+			}
 		});
 
 	m_timer.start();
@@ -588,6 +601,13 @@ void SDRunoPlugin_TXLinkForm::Setup()
 		if (UDPevent) { ProcessUDPEvent(); }	// Run your sequencing logic
 		udp_poller.start();						// Restart the timer for the next event
 		});
+
+	m_tunerPoller.interval(std::chrono::milliseconds(5));   // 5ms; raise to 10ms if 5 feels unnecessary, lower if you want even tighter response
+	m_tunerPoller.elapse([this]
+		{
+			DrainTunerQueue();
+		});
+	m_tunerPoller.start();
 
 
 	//Note initial values sent to TXlink Arduino in ProcessIncomingSerial() which detects startup message from it
@@ -695,16 +715,10 @@ void SDRunoPlugin_TXLinkForm::OnTimer()
 		return;										//skip the rest of the code in this elapse function if UnloadInProgress
 	}
 
-	TIME_STEP("CheckWindowState", CheckWindowState());					//check if main SDRuno window minimized or restored
+	TRY_STEP("CheckWindowState", CheckWindowState());					//check if main SDRuno window minimized or restored
 
 	//update TX Freq control
-	string strTXfreq = std::to_string((int64_t)CurrentTXfreq);
-	//update Plugin label to show TXfreq
-	//add dots to show 1000's in Plugin label
-	for (int i = strTXfreq.length(); i > 3; i = i - 3)
-	{
-		strTXfreq = strTXfreq.substr(0, i - 3) + "." + strTXfreq.substr(i - 3);
-	}
+	string strTXfreq = AddThousandsSeparator((int64_t)CurrentTXfreq);
 	freqTb.format(true);
 	freqTb.caption("<bold size=12>" + strTXfreq + "</>");
 	//freqTb.caption(strTXfreq);
@@ -712,12 +726,12 @@ void SDRunoPlugin_TXLinkForm::OnTimer()
 	bRITchkbox = RITchkbox.checked();		//get RIT checkbox state
 	bOFSchkbox = OFSchkbox.checked();
 
-	TIME_STEP("DrainFreqQueue", DrainFreqQueue());	//process any new freq changes from SDRuno
+	TRY_STEP("DrainFreqQueue", DrainFreqQueue());	//process any new freq changes from SDRuno
 
-	TIME_STEP("ProcessMessageQueue", ProcessMessageQueue());					//process any external messages in the queue
+	TRY_STEP("ProcessMessageQueue", ProcessMessageQueue());					//process any external messages in the queue
 
 	// look for incoming serial and UDP on timer event
-	TIME_STEP("ProcessIncomingSerial", ProcessIncomingSerial());
+	TRY_STEP("ProcessIncomingSerial", ProcessIncomingSerial());
 	//ProcessUDPEvent();						//now triggered by separate udp_poller timer
 
 	busy = false;
@@ -744,6 +758,24 @@ void SDRunoPlugin_TXLinkForm::CheckWindowState()
 	{
 		hide();
 	}
+}
+
+std::string SDRunoPlugin_TXLinkForm::AddThousandsSeparator(int64_t value)
+{
+	bool negative = value < 0;
+	std::string digits = std::to_string(negative ? -value : value);
+
+	std::string result;
+	int count = 0;
+	for (int i = static_cast<int>(digits.length()) - 1; i >= 0; --i)
+	{
+		result.insert(result.begin(), digits[i]);
+		if (++count % 3 == 0 && i != 0)
+		{
+			result.insert(result.begin(), '.');
+		}
+	}
+	return negative ? "-" + result : result;
 }
 
 void SDRunoPlugin_TXLinkForm::ProcessMessageQueue()
@@ -809,15 +841,20 @@ void SDRunoPlugin_TXLinkForm::QueueFrequencyChanged(double freq0, double freq1)
 // Called from OnTimer(), same place ProcessMessageQueue() is called
 void SDRunoPlugin_TXLinkForm::DrainFreqQueue()
 {
-	std::queue<FreqChangeRequest> local;
+	FreqChangeRequest latest;
+	bool hasUpdate = false;
 	{
 		std::lock_guard<std::mutex> lock(m_freqQueueMutex);
-		std::swap(local, m_freqQueue);
+		while (!m_freqQueue.empty())
+		{
+			latest = m_freqQueue.front();
+			m_freqQueue.pop();
+			hasUpdate = true;
+		}
 	}
-	while (!local.empty())
+	if (hasUpdate)
 	{
-		ProcessFrequencyChanged(local.front().freq0, local.front().freq1);
-		local.pop();
+		ProcessFrequencyChanged(latest.freq0, latest.freq1);
 	}
 }
 
@@ -1050,7 +1087,7 @@ void SDRunoPlugin_TXLinkForm::ProcessUDPEvent()
 	//WSJT_X FT8 UDP request?
 
 	std::lock_guard<std::mutex> lock(UDPEvent_mtx);                     // Locks the UDPEvent mutex
-	if (UDPevent.exchange(false, std::memory_order_acq_rel))									//set from UDP thread when wsjtx message received
+	if (UDPevent.exchange(false, std::memory_order_acq_rel))			//set from UDP thread when wsjtx message received
 	{
 		//following logic to handle correct mode restore on startup
 		static bool FirstTime = true;				//first time in this function so maybe ignore wsjtx for now?
@@ -1218,6 +1255,51 @@ void SDRunoPlugin_TXLinkForm::SetupDataMode()
 		if (DigiTXmodeStr == "FT2") { bndw = FilterBandwidthFT2; }
 		m_controller.SetFilterBandwidth(0, bndw);
 		TXmodeChange = false;
+	}
+}
+
+void SDRunoPlugin_TXLinkForm::QueueTunerFreqChange(int32_t freqIncr)
+{
+	std::lock_guard<std::mutex> lock(m_tunerQueueMutex);
+	m_tunerQueue.push({ freqIncr });
+}
+
+void SDRunoPlugin_TXLinkForm::DrainTunerQueue()
+{
+	std::queue<TunerFreqRequest> local;
+	{
+		std::lock_guard<std::mutex> lock(m_tunerQueueMutex);
+		std::swap(local, m_tunerQueue);
+	}
+	while (!local.empty())
+	{
+		ProcessTunerFreqChange(local.front().freqIncr);
+		local.pop();
+	}
+}
+
+void SDRunoPlugin_TXLinkForm::ProcessTunerFreqChange(int32_t freqIncr)
+{
+	// Moved from TunerServer.cpp's "if (FreqIncr != 0)" block - now safe,
+	// runs only on the Form thread.
+
+	if (SplitMode == SplitNone)
+	{
+		long Freq = m_controller.GetVfoFrequency(0);
+		m_controller.SetVfoFrequency(0, Freq + freqIncr);
+	}
+	else if (SplitMode == SplitTxRx)
+	{
+		if (bRITchkbox)
+		{
+			long Freq = m_controller.GetVfoFrequency(0);
+			m_controller.SetVfoFrequency(0, Freq + freqIncr);
+		}
+		else
+		{
+			long Freq = m_controller.GetVfoFrequency(1);
+			m_controller.SetVfoFrequency(1, Freq + freqIncr);
+		}
 	}
 }
 
