@@ -607,7 +607,7 @@ void SDRunoPlugin_TXLinkForm::Setup()
 		{
 			DrainTunerQueue();
 		});
-	m_tunerPoller.start();
+	//m_tunerPoller.start();
 
 
 	//Note initial values sent to TXlink Arduino in ProcessIncomingSerial() which detects startup message from it
@@ -794,17 +794,17 @@ void SDRunoPlugin_TXLinkForm::ProcessMessageQueue()
 		// special cases
 		if (message == "$SendRXfreq$")
 		{
-			SendRXfreq();
+			TRY_STEP("SendRXfreq", SendRXfreq());
 			return;
 		}
 		else if (message == "$SendTXfreq$")
 		{
-			SendTXfreq();
+			TRY_STEP("SendTXfreq", SendTXfreq());
 			return;
 		}
 		else if (message == "$SaveIniData$")
 		{
-			SaveIniData();
+			TRY_STEP("SaveIniData", SaveIniData());
 			return;
 		}
 		else
