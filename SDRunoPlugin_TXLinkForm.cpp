@@ -963,22 +963,47 @@ void SDRunoPlugin_TXLinkForm::ProcessIncomingSerial()
 			}
 			else if (NewMsg.substr(0, 1) == "F")
 			{
+				auto __t0 = std::chrono::steady_clock::now();
 				SWRFWDtxt.caption(NewMsg.substr(1));
-				//SWRFWDtxt.caption("123");
-				//SWRFWDlbl.caption("123");
+				auto __ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+					std::chrono::steady_clock::now() - __t0).count();
+				if (__ms > 10) {
+					std::cout << get_millis() << " SWRFWDtxt.caption() took " << __ms << "ms" << std::endl;
+				}
 			}
 			else if (NewMsg.substr(0, 1) == "R")
 			{
+				auto __t0 = std::chrono::steady_clock::now();
 				SWRREFtxt.caption(NewMsg.substr(1));
+				auto __ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+					std::chrono::steady_clock::now() - __t0).count();
+				if (__ms > 10) {
+					std::cout << get_millis() << " SWRREFtxt.caption() took " << __ms << "ms" << std::endl;
+				}
+				
 			}
 			else if (NewMsg.substr(0, 1) == "S")
 			{
+				auto __t0 = std::chrono::steady_clock::now();
 				SWRSWRtxt.caption(NewMsg.substr(1));
+				auto __ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+					std::chrono::steady_clock::now() - __t0).count();
+				if (__ms > 10) {
+					std::cout << get_millis() << " SWRSWRtxt.caption() took " << __ms << "ms" << std::endl;
+				}
+				
 			}
 			else if (NewMsg.substr(0, 1) == "T")
 			{
+				auto __t0 = std::chrono::steady_clock::now();
 				SetTXtemp(NewMsg.substr(1));
 				TXtempLbl.caption(NewMsg.substr(1) + " degC");
+				auto __ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+					std::chrono::steady_clock::now() - __t0).count();
+				if (__ms > 10) {
+					std::cout << get_millis() << " SetTXtemp.caption() took " << __ms << "ms" << std::endl;
+				}
+				
 			}
 			else if (NewMsg.substr(0, 1) == "D")				//force TX off due to TXtempLimit exceeded
 			{
