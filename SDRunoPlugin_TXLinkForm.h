@@ -30,9 +30,7 @@
 #include "NamedPipeServer.h"
 #include "MessageQueue.h"
 #include "RealTimeClock_Utils.h"
-#include <queue>
 
-struct TunerFreqRequest { int32_t freqIncr; };
 
 // Shouldn't need to change these
 #define topBarHeight (27)
@@ -92,15 +90,6 @@ public:
 	
 	nana::timer udp_poller;
 
-	std::queue<TunerFreqRequest> m_tunerQueue;
-	std::mutex m_tunerQueueMutex;
-
-	void QueueTunerFreqChange(int32_t freqIncr);   // callable from Tuner thread
-	void DrainTunerQueue();                         // Form-thread only
-	void ProcessTunerFreqChange(int32_t freqIncr);  // Form-thread only
-
-	nana::timer m_tunerPoller;   // new, dedicated fast timer
-
 private:
 	const std::string com_port = "\\\\.\\COM5";
 	string COMportPrefix = "\\\\.\\";
@@ -121,7 +110,6 @@ private:
 	void OnTimer();
 	void ProcessMessageQueue();
 	void CheckWindowState();
-	std::string AddThousandsSeparator(int64_t value);
 	void ProcessIncomingSerial();
 	void DrainFreqQueue();
 	void ProcessUDPEvent();

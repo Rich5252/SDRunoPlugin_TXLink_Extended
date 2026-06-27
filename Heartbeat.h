@@ -29,13 +29,3 @@ void Watchdog_Loop(std::atomic<bool>& exitRequest);
         } \
     } while (0)
 
-#define TRY_STEP(label, call) \
-    do { \
-        try { \
-            call; \
-        } catch (const std::exception& e) { \
-            std::cout << get_millis() << " *** EXCEPTION in [" << label << "]: " << e.what() << std::endl; \
-        } catch (...) { \
-            std::cout << get_millis() << " *** UNKNOWN EXCEPTION in [" << label << "]" << std::endl; \
-        } \
-    } while (0)

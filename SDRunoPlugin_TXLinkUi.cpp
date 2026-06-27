@@ -7,7 +7,6 @@
 #include <nana/gui/timer.hpp>
 #include <nana/gui/detail/bedrock.hpp>
 #include <unoevent.h>
-//#include <processthreadsapi.h>
 
 #include "SDRunoPlugin_TXLink.h"
 #include "SDRunoPlugin_TXLinkUi.h"
@@ -90,7 +89,6 @@ void SDRunoPlugin_TXLinkUi::ShutdownFormThread()
 // Show and execute the form on its own thread
 void SDRunoPlugin_TXLinkUi::RunForm()
 {
-	SetThreadDescription(GetCurrentThread(), L"TXLink_FormThread");
 	std::cout << get_millis() << " SDRunoPlugin_TXLinkUi::RunForm thread started" << std::endl;
 	//get defaults for wsjtx UDP_Server_Loop and enable that to run
 	std::string wsjtxPath;
