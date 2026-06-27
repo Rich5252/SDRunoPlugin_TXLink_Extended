@@ -110,6 +110,7 @@ private:
 	void OnTimer();
 	void ProcessMessageQueue();
 	void CheckWindowState();
+	std::string AddThousandsSeparator(int64_t value);
 	void ProcessIncomingSerial();
 	void DrainFreqQueue();
 	void ProcessUDPEvent();

@@ -573,9 +573,22 @@ void SDRunoPlugin_TXLinkForm::Setup()
 	// this next call sets the code to be executed after every interval
 	m_timer.elapse([&]
 		{
-			m_timer.stop();		//stop timer while processing to prevent re-entrancy
-			OnTimer();
-			m_timer.start();	//restart timer
+			try
+			{
+				m_timer.stop();
+				OnTimer();
+				m_timer.start();
+			}
+			catch (const std::exception& e)
+			{
+				std::cout << get_millis() << " *** OnTimer EXCEPTION: " << e.what() << std::endl;
+				m_timer.start();   // restart anyway, so we don't permanently lose the timer
+			}
+			catch (...)
+			{
+				std::cout << get_millis() << " *** OnTimer UNKNOWN EXCEPTION (non-std::exception type)" << std::endl;
+				m_timer.start();
+			}
 		});
 
 	m_timer.start();
@@ -698,13 +711,7 @@ void SDRunoPlugin_TXLinkForm::OnTimer()
 	TIME_STEP("CheckWindowState", CheckWindowState());					//check if main SDRuno window minimized or restored
 
 	//update TX Freq control
-	string strTXfreq = std::to_string((int64_t)CurrentTXfreq);
-	//update Plugin label to show TXfreq
-	//add dots to show 1000's in Plugin label
-	for (int i = strTXfreq.length(); i > 3; i = i - 3)
-	{
-		strTXfreq = strTXfreq.substr(0, i - 3) + "." + strTXfreq.substr(i - 3);
-	}
+	string strTXfreq = AddThousandsSeparator((int64_t)CurrentTXfreq);
 	freqTb.format(true);
 	freqTb.caption("<bold size=12>" + strTXfreq + "</>");
 	//freqTb.caption(strTXfreq);
@@ -745,6 +752,25 @@ void SDRunoPlugin_TXLinkForm::CheckWindowState()
 		hide();
 	}
 }
+
+std::string SDRunoPlugin_TXLinkForm::AddThousandsSeparator(int64_t value)
+{
+	bool negative = value < 0;
+	std::string digits = std::to_string(negative ? -value : value);
+
+	std::string result;
+	int count = 0;
+	for (int i = static_cast<int>(digits.length()) - 1; i >= 0; --i)
+	{
+		result.insert(result.begin(), digits[i]);
+		if (++count % 3 == 0 && i != 0)
+		{
+			result.insert(result.begin(), '.');
+		}
+	}
+	return negative ? "-" + result : result;
+}
+
 
 void SDRunoPlugin_TXLinkForm::ProcessMessageQueue()
 {
