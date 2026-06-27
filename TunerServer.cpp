@@ -15,11 +15,12 @@
 #include "UDP_Server.h"
 
 std::atomic<bool> TunerExitRequest(false);
+std::mutex m_lock3;
 
 //started in a seperate thread from SDRunoPlugin_TXLink.cpp
 void Tuner_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _parent)
 {
-    //
+	//
 	int32_t EncoderSteps = 0;
 	int32_t FreqIncr = 0;
 
@@ -29,7 +30,7 @@ void Tuner_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _
 	SimpleSerial TunerSerial(tuner_com_port, tuner_COM_BAUD_RATE, false);
 
 	while (!TunerExitRequest && TunerSerial.GetErrorMsg() == "")
-    {
+	{
 		if (!TunerSerial.Connected())
 		{
 			std::cout << get_millis() << "Tuner Serial not connected" << std::endl;
@@ -58,28 +59,69 @@ void Tuner_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _
 			if (FreqIncr != 0)
 			{
 				if (TunerExitRequest) { break; }
-				_parent.m_Ui->m_form->QueueTunerFreqChange(FreqIncr);
-				EncoderSteps = 0;
-				FreqIncr = 0;
+				m_lock3.lock();
+				SDRunoPlugin_TXLinkForm::eSplitMode tmp = _parent.m_Ui->m_form->SplitMode;			//can now get split mode from _parent.m_Ui.SplitMode directly
+				if (tmp == SDRunoPlugin_TXLinkForm::SplitNone)
+				{
+					//no split so change RX frequency
+					long Freq = _controller.GetVfoFrequency(0);
+					_controller.SetVfoFrequency(0, Freq + FreqIncr);
+					EncoderSteps = 0;	//reset encoder steps
+					FreqIncr = 0;	//reset frequency increment
+				}
+				if (tmp == SDRunoPlugin_TXLinkForm::SplitTxRx)
+				{
+					if (_parent.m_Ui->m_form->bRITchkbox)
+					{
+						//RIT so change RX frequency
+						long Freq = _controller.GetVfoFrequency(0);
+						_controller.SetVfoFrequency(0, Freq + FreqIncr);
+					}
+					else
+					{
+						//no RIT so change TX frequency
+						long Freq = _controller.GetVfoFrequency(1);
+						_controller.SetVfoFrequency(1, Freq + FreqIncr);
+					}
+					EncoderSteps = 0;	//reset encoder steps
+					FreqIncr = 0;	//reset frequency increment
+				}
+				//if FT4/8 split count up 1 revolution (400 steps) and send CTRL SHFT F11 or F12 to WSTJTX to change TX frequency by 1kHz
+				if (EncoderSteps > 400)
+				{
+					//double Freq = _controller.GetVfoFrequency(0);
+					//WSJTX_UDPOutQ.push((uint64_t)(Freq + 1000));		//send new freq to wsjtx via UDP
+
+					Send_CtrlShftF12();
+					EncoderSteps = 0;
+					FreqIncr = 0;
+				}
+				if (EncoderSteps < -400)
+				{
+					//double Freq = _controller.GetVfoFrequency(0);
+					//WSJTX_UDPOutQ.push((uint64_t)(Freq - 1000));		//send new freq to wsjtx via UDP
+
+
+					Send_CtrlShftF11();
+					EncoderSteps = 0;
+					FreqIncr = 0;
+				}
+				m_lock3.unlock();
 			}
 
-			if (EncoderSteps > 400)
-			{
-				Send_CtrlShftF12();
-				EncoderSteps = 0;
-				FreqIncr = 0;
-			}
-			if (EncoderSteps < -400)
-			{
-				Send_CtrlShftF11();
-				EncoderSteps = 0;
-				FreqIncr = 0;
-			}
 		}
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
+	}
 
-	//end thread
+	/*	string tmp = TunerSerial.GetErrorMsg();			//GetErrorMsg not implimented yet
+	if (tmp != "")
+	{
+		LogAndDisplayError(tmp);
+		std::cout << get_millis() << "Tuner Serial error: " << tmp << std::endl;
+	}
+*/
+
+//end thread
 	std::cout << get_millis() << "TunerSerial exit equest received, attempt to close com port" << std::endl;
 	int ret = TunerSerial.CloseSerialPort();
 	std::cout << get_millis() << "TunerSerial port closed " << ret << std::endl;

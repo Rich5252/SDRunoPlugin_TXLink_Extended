@@ -840,11 +840,12 @@ void SDRunoPlugin_TXLinkForm::DrainFreqQueue()
 			latest = m_freqQueue.front();
 			m_freqQueue.pop();
 			hasUpdate = true;
+			ProcessFrequencyChanged(latest.freq0, latest.freq1);
 		}
 	}
 	if (hasUpdate)
 	{
-		ProcessFrequencyChanged(latest.freq0, latest.freq1);
+		
 	}
 }
 
