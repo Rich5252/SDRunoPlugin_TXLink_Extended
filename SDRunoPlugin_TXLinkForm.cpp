@@ -902,8 +902,11 @@ void SDRunoPlugin_TXLinkForm::ProcessIncomingSerial()
 	{
 		if (std::chrono::steady_clock::now() - startTime > maxDuration)
 		{
-			std::cout << std::endl << get_millis() << " ProcessIncomingSerial: time budget exceeded, "
-				<< "defer to next tick. LastMsg = \"" << LastMsg << "\"" << std::endl << std::endl;
+			string str = "\r\n" + get_millis() + " ProcessIncomingSerial: time budget exceeded, "
+							+ "defer to next tick. LastMsg = \"" + LastMsg + "\"";
+			if (NewMsg != "") str += ", NewMsg = \"" + NewMsg + "\"";
+			str += "\r\n\r\n";
+			std::cout << str;		//this helps avoid splitting line in console
 			break;
 		}
 
