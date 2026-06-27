@@ -668,12 +668,6 @@ void SDRunoPlugin_TXLinkForm::OnTimer()
 {
 	g_formHeartbeatMs.store(now_ms(), std::memory_order_relaxed);
 	m_timerCount++;
-	static bool busy = false;
-	if (busy) {
-		std::cout << get_millis() << "Form::OnTimer Event already BUSY - IGNORED CALL" << endl;
-			return;	//should never happen as elapse is not re-entrant
-	}
-	busy = true;
 
 	if (m_parent.FormPrepareUnloadRequest)				//request from TXLink destructor - THIS NEEDS TO HAPPEN FIRST
 	{
@@ -683,7 +677,6 @@ void SDRunoPlugin_TXLinkForm::OnTimer()
 		InitiateFormUnload();						//request form unload
 		CloseCOMPort();									//COM to TX no longer needed
 		m_parent.FormPrepareUnloadRequest = false;		//clear the request flag to signal complete to Ui
-		busy = false;									// allow another tick to complete close down
 		return;											//skip the rest of the code in this elapse function
 	}
 	if (UnloadInProgress)								//prep already done for final unload			
@@ -695,7 +688,6 @@ void SDRunoPlugin_TXLinkForm::OnTimer()
 			std::cout << get_millis() << " SDRunoPlugin_TXLinkForm::m_timer.elapse - back from nana::API::exit_all()" << std::endl;
 			BackFromExitRequest = true;				//set flag to signal back from exit request
 			m_parent.FormExitAllRequest = false;		//clear the request flag to signal complete to Ui
-			busy = false;								// allow another tick to complete close down
 			return;									//another tick never happens after nana::API::exit_all();
 		}
 		if (BackFromExitRequest)						//shouldnt get here as exit_all() turns off timer too
@@ -704,7 +696,6 @@ void SDRunoPlugin_TXLinkForm::OnTimer()
 			return;									//skip the rest of the code in this elapse function if UnloadInProgress
 		}
 		//std::cout << get_millis() << " SDRunoPlugin_TXLinkForm::m_timer.elapse - UnloadInProgress - waiting for ExitAllRequest" << std::endl;
-		busy = false;								// allow another tick to complete close down
 		return;										//skip the rest of the code in this elapse function if UnloadInProgress
 	}
 
@@ -727,7 +718,6 @@ void SDRunoPlugin_TXLinkForm::OnTimer()
 	TIME_STEP("ProcessIncomingSerial", ProcessIncomingSerial());
 	//ProcessUDPEvent();						//now triggered by separate udp_poller timer
 
-	busy = false;
 }
 
 void SDRunoPlugin_TXLinkForm::CheckWindowState()
