@@ -137,6 +137,7 @@
     <ClCompile Include="HeartBeat.cpp" />
     <ClCompile Include="MessageBox.cpp" />
     <ClCompile Include="NamedPipeServer.cpp" />
+    <ClCompile Include="SDRUnoHelper.cpp" />
     <ClCompile Include="SDRunoPlugin_TXLink.cpp" />
     <ClCompile Include="SDRunoPlugin_TXLinkATUDialog.cpp" />
     <ClCompile Include="SDRunoPlugin_TXLinkForm.cpp" />
@@ -160,6 +161,7 @@
     <ClInclude Include="Console.h" />
     <ClInclude Include="Heartbeat.h" />
     <ClInclude Include="RealTimeClock_Utils.h" />
+    <ClInclude Include="SDRUnoHelper.h" />
     <ClInclude Include="UDP_Type17.h" />
     <ClInclude Include="MessageQueue.h" />
     <ClInclude Include="NamedPipeServer.h" />

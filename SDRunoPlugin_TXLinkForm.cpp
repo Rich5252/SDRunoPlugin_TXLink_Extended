@@ -15,6 +15,7 @@
 #include "DXspiderClient.h"
 #include "FindWindowTitleRoot.h"
 #include "Heartbeat.h"
+#include "SDRUnoHelper.h"
 
 #include <io.h>
 #include <shlobj.h>
@@ -1230,8 +1231,8 @@ void SDRunoPlugin_TXLinkForm::SetupDataMode()
 	}
 	CurrentRXfreq = CurrentTXfreq + TXDF;
 
-	double f0 = m_controller.GetVfoFrequency(0);
-	double f1 = m_controller.GetVfoFrequency(1);
+	double f0 = GetVfoFrequencySafe(m_controller, 0);
+	double f1 = GetVfoFrequencySafe(m_controller, 1);
 	if (CurrentTXfreq != f0) m_controller.SetVfoFrequency(0, CurrentTXfreq);
 	if (CurrentRXfreq != f1) m_controller.SetVfoFrequency(1, CurrentRXfreq);
 
@@ -1276,19 +1277,19 @@ void SDRunoPlugin_TXLinkForm::ProcessTunerFreqChange(int32_t freqIncr)
 
 	if (SplitMode == SplitNone)
 	{
-		long Freq = m_controller.GetVfoFrequency(0);
+		long Freq = GetVfoFrequencySafe(m_controller, 0);
 		m_controller.SetVfoFrequency(0, Freq + freqIncr);
 	}
 	else if (SplitMode == SplitTxRx)
 	{
 		if (bRITchkbox)
 		{
-			long Freq = m_controller.GetVfoFrequency(0);
+			long Freq = GetVfoFrequencySafe(m_controller, 0);
 			m_controller.SetVfoFrequency(0, Freq + freqIncr);
 		}
 		else
 		{
-			long Freq = m_controller.GetVfoFrequency(1);
+			long Freq = GetVfoFrequencySafe(m_controller, 1);
 			m_controller.SetVfoFrequency(1, Freq + freqIncr);
 		}
 	}
@@ -1328,7 +1329,7 @@ void SDRunoPlugin_TXLinkForm::SendRXfreq()
 	if (TrackFreq || freqTb.caption() == "")
 	{
 		//update TX freq fron VRX0 freq change
-		double tmp = m_controller.GetVfoFrequency(0);
+		double tmp = GetVfoFrequencySafe(m_controller, 0);
 		if (tmp > 0)
 		{
 			CurrentTXfreq = tmp;
@@ -1394,7 +1395,7 @@ void SDRunoPlugin_TXLinkForm::SendTXfreq()
 		m_parent._updateRX_AnnoEntry("FTX", "", (int64_t)CurrentRXfreq);
 	}
 
-	double vtxFreq = m_controller.GetVfoFrequency(1);
+	double vtxFreq = GetVfoFrequencySafe(m_controller, 1);
 	if (vtxFreq != CurrentTXfreq && vtxFreq > 0 && SplitMode != SplitFT8)
 	{
 		m_controller.SetVfoFrequency(1, CurrentTXfreq);					// force vrx1 to track TX freq
@@ -2043,8 +2044,8 @@ void SDRunoPlugin_TXLinkForm::SwapTxRxFreq()
 	if (SplitMode == SplitTxRx)
 	{
 		//swap TX and RX freqs
-		double VFO0 = m_controller.GetVfoFrequency(0);
-		double VFO1 = m_controller.GetVfoFrequency(1);
+		double VFO0 = GetVfoFrequencySafe(m_controller, 0);
+		double VFO1 = GetVfoFrequencySafe(m_controller, 1);
 		m_controller.SetVfoFrequency(0, VFO1);
 		m_controller.SetVfoFrequency(1, VFO0);
 	}

@@ -14,6 +14,7 @@
 #include "SDRunoPlugin_TXLinkForm.h"
 #include "UDP_Server.h"
 #include "RTTY_Server.h"
+#include "SDRUnoHelper.h"
 //#include "nana_cleanup.h"
 
 
@@ -159,8 +160,8 @@ void SDRunoPlugin_TXLinkUi::UiHandleEvent(const UnoEvent& ev)
 		break;
 
 	case UnoEvent::FrequencyChanged:
-		freq0 = m_controller.GetVfoFrequency(0);
-		freq1 = m_controller.GetVfoFrequency(1);
+		freq0 = GetVfoFrequencySafe(m_controller, 0);
+		freq1 = GetVfoFrequencySafe(m_controller, 1);
 		m_form->QueueFrequencyChanged(freq0, freq1);   // no other m_form or m_controller access here
 		break;
 

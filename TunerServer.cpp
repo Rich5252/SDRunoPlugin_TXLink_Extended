@@ -13,6 +13,7 @@
 #include "TunerServer.h"
 #include "SendKeys.h"
 #include "UDP_Server.h"
+#include "SDRUnoHelper.h"
 
 std::atomic<bool> TunerExitRequest(false);
 std::mutex m_lock3;
@@ -64,7 +65,7 @@ void Tuner_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _
 				if (tmp == SDRunoPlugin_TXLinkForm::SplitNone)
 				{
 					//no split so change RX frequency
-					long Freq = _controller.GetVfoFrequency(0);
+					long Freq = GetVfoFrequencySafe(_controller, 0);
 					_controller.SetVfoFrequency(0, Freq + FreqIncr);
 					EncoderSteps = 0;	//reset encoder steps
 					FreqIncr = 0;	//reset frequency increment
@@ -74,13 +75,13 @@ void Tuner_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _
 					if (_parent.m_Ui->m_form->bRITchkbox)
 					{
 						//RIT so change RX frequency
-						long Freq = _controller.GetVfoFrequency(0);
+						long Freq = GetVfoFrequencySafe(_controller, 0);
 						_controller.SetVfoFrequency(0, Freq + FreqIncr);
 					}
 					else
 					{
 						//no RIT so change TX frequency
-						long Freq = _controller.GetVfoFrequency(1);
+						long Freq = GetVfoFrequencySafe(_controller, 1);
 						_controller.SetVfoFrequency(1, Freq + FreqIncr);
 					}
 					EncoderSteps = 0;	//reset encoder steps
