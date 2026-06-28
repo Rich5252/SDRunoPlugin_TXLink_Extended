@@ -33,6 +33,10 @@ void Watchdog_Loop(std::atomic<bool>& exitRequest);
     do { \
         try { \
             call; \
+        } catch (const std::system_error& e) { \
+            std::cout << get_millis() << " *** EXCEPTION in [" << label << "]: " << e.what() \
+                       << " | code=" << e.code().value() \
+                       << " | category=" << e.code().category().name() << std::endl; \
         } catch (const std::exception& e) { \
             std::cout << get_millis() << " *** EXCEPTION in [" << label << "]: " << e.what() << std::endl; \
         } catch (...) { \

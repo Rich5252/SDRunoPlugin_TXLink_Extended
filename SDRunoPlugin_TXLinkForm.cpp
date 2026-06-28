@@ -1335,7 +1335,7 @@ void SDRunoPlugin_TXLinkForm::SendRXfreq()
 			CurrentRXfreq = tmp;
 		}
 	}
-	SendTXfreq();
+	TRY_STEP("SendRXfreq-SendTXfreq", SendTXfreq());
 }
 
 std::mutex mtx2;
