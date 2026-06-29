@@ -32,25 +32,25 @@ extern std::atomic <bool> UDPevent;				//new status update
 extern std::mutex UDPEvent_mtx;					// Declare a mutex
 
 extern bool UDPHaltTXevent;
-extern std::string WSJTX_TXmodeStr;			//"FT8", "FT4", "FT2"
+extern std::string WSJTX_TXmodeStr;	//needed		//"FT8", "FT4", "FT2"
 extern bool TXmodeChange;
-extern bool TXflg;
-extern int TXDF;
-extern std::string TXsymbols;
-extern std::string DXcall;
-extern std::string DXgrid;
-extern std::string newDXcall;
-extern std::string strDecodeMsg;
+extern bool TXflg;                  //needed
+extern int TXDF;                    //needed
+extern std::string TXsymbols;       //needed
+extern std::string DXcall;          //needed
+extern std::string DXgrid;          //needed
+extern std::string newDXcall;       //needed
+extern std::string strDecodeMsg;    //needed
 extern std::string strWSJTXpath;
 extern std::string strCallsign;
 extern std::string strLocator;
 extern uint64_t curTX
 ;		//set from form
-extern uint64_t newFrequency;		// non zero if it has just changed
-extern bool dataChanged;			//set when new data received from wsjtx to trigger form update
+extern uint64_t newFrequency;		//needed // non zero if it has just changed
+extern bool dataChanged;			//needed //set when new data received from wsjtx to trigger form update
 extern bool msgChanged;				//set when new message received from wsjtx to trigger form update
-extern std::string strReport;
-extern uint32_t RxDF;
+extern std::string strReport;       //needed
+extern uint32_t RxDF;               //needed
 extern int RTCdelay;			//actual preemptive advanced start for FT2 = RTCcurrentDelay - RTCdelayOffset
 extern int RTCdelayOffset;		//local offset from Settings that reduces RTCcurrentDelay value
 extern int RTCcurrentDelay;	//current delay in ms applied to RTC - updated from NamedPipe
