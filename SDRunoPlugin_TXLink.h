@@ -14,6 +14,7 @@
 
 #include "SDRunoPlugin_TXLink.h"
 #include "SDRunoPlugin_TXLinkUi.h"
+#include "SDRunoPlugin_TXLinkForm.h"
 #include "UDP_Server.h"
 #include "RTTY_Server.h"
 

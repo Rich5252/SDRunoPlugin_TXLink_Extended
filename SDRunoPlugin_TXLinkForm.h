@@ -30,6 +30,8 @@
 #include "NamedPipeServer.h"
 #include "MessageQueue.h"
 #include "RealTimeClock_Utils.h"
+#include "UDPStatusEvent.h"   // struct UDPStatusEvent only - deliberately NOT UDP_Server.h,
+// which would create a circular include via SDRunoPlugin_TXLink.h
 #include <queue>
 
 struct TunerFreqRequest { int32_t freqIncr; };
@@ -59,7 +61,7 @@ public:
 
 	SDRunoPlugin_TXLinkForm(SDRunoPlugin_TXLinkUi& parent, IUnoPluginController& controller);
 	~SDRunoPlugin_TXLinkForm();
-	
+
 	void Run();
 
 	double	CurrentTXfreq = 10120000;
@@ -84,12 +86,12 @@ public:
 	bool StandbyMode = true;
 
 	string DigiTXmodeStr = "FT8";
-	
+
 	bool SendSerialMsg(const std::string& msg);			//thread safe way of sending messages from other processes or threads
 
 
 	void QueueFrequencyChanged(double freq0, double freq1);   // callable from any thread
-	
+
 	nana::timer udp_poller;
 
 	std::queue<TunerFreqRequest> m_tunerQueue;
@@ -243,7 +245,7 @@ private:
 
 	// TODO: Now add your UI controls here
 	nana::label freqTbLbl{ *this, nana::rectangle(20, 38, 65, 20) };
-	nana::label freqTb{ *this, nana::rectangle(98, 35, 105, 22)};
+	nana::label freqTb{ *this, nana::rectangle(98, 35, 105, 22) };
 	nana::button FixFreqBtn{ *this, nana::rectangle(20, 65, 50, 20) };
 	nana::button FixTXupBtn{ *this, nana::rectangle(75, 65,50,20) };
 	nana::button ResetRXFreqBtn{ *this, nana::rectangle(130, 65, 50, 20) };
@@ -253,7 +255,7 @@ private:
 	nana::textbox COMportTb{ *this, nana::rectangle(20, 95, 50, 20) };
 	nana::button StandbyBtn{ *this, nana::rectangle(110, 95, 80, 20) };
 	nana::checkbox MuteTXchkbox{ *this, nana::rectangle(205, 98, 70, 20) };
-	nana::label FT8Lbl{ *this, nana::rectangle(20, 126, 25, 20) }; 
+	nana::label FT8Lbl{ *this, nana::rectangle(20, 126, 25, 20) };
 	nana::label FT8txOnLbl{ *this, nana::rectangle(50, 128, 10, 10) };
 	nana::label FT8msgLbl{ *this, nana::rectangle(70, 126, 210, 20) };
 	nana::button DXspotBtn{ *this, nana::rectangle(259, 126, 20, 20) };
@@ -279,12 +281,27 @@ private:
 	bool bATUformOpen;
 
 	bool bLastTenCalls(string DXcall);				// chk last ten dxcalls from wsjtx
-	#define nCalls 10
+#define nCalls 10
 	string strLastTenCalls[nCalls];
 	int nLastCall;									//last call index
 
-	SDRunoPlugin_TXLinkUi & m_parent;
-	IUnoPluginController & m_controller;
+	SDRunoPlugin_TXLinkUi& m_parent;
+	IUnoPluginController& m_controller;
 
 	std::mutex m_lock;
+
+	// Form-owned copy of the most recent fully-processed UDP status snapshot.
+	// Written ONLY inside ProcessUDPEvent() (Form thread). Read freely by
+	// button handlers (DXspotBtnClicked, etc.) and millisToEnd() - safe because
+	// both writer and readers run on the same (Form) thread, so no locking is
+	// needed at the point of use. Replaces direct reads of the old UDP_Server.h
+	// externs (DXcall, DXgrid, strReport, RxDF, strDecodeMsg, WSJTX_TXmodeStr...).
+	UDPStatusEvent m_lastUDPStatus;
+
+	// One-shot "TX mode just changed" trigger for SetupDataMode()'s filter
+	// bandwidth update. Set true here (Form thread) when an incoming event's
+	// txModeChanged flag is set; consumed (reset to false) inside SetupDataMode()
+	// itself, same as the old TXmodeChange global's read-then-reset behaviour -
+	// just now confined to the Form thread instead of being a cross-thread global.
+	bool m_txModeChangePending = true;
 };

@@ -162,6 +162,7 @@
     <ClInclude Include="Heartbeat.h" />
     <ClInclude Include="RealTimeClock_Utils.h" />
     <ClInclude Include="SDRUnoHelper.h" />
+    <ClInclude Include="UDPStatusEvent.h" />
     <ClInclude Include="UDP_Type17.h" />
     <ClInclude Include="MessageQueue.h" />
     <ClInclude Include="NamedPipeServer.h" />

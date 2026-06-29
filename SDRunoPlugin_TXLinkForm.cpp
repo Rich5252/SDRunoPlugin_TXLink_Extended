@@ -277,13 +277,13 @@ void SDRunoPlugin_TXLinkForm::Setup()
 	//events().destroy([&] { m_parent.FormClosed(); });
 	//events().unload([&] { m_parent.FormUnload(); });
 	events().unload([&](const nana::arg_unload& arg)					//called when X is pressed, request unload from controller
-	{
-		std::cout << std::endl << get_millis() << " SDRunoPlugin_TXLinkForm:: nana form exit clicked. UnloadInProgress = " << std::boolalpha << UnloadInProgress << std::endl;
-		if (!UnloadInProgress) { m_parent.RequestDllUnload(); }								//ask SDRUno to unload this plugin if not already in progress
-		arg.cancel = true;							// Now, cancel the unload. This prevents the form from closing so saves and clean up happens from the top.
-	});
+		{
+			std::cout << std::endl << get_millis() << " SDRunoPlugin_TXLinkForm:: nana form exit clicked. UnloadInProgress = " << std::boolalpha << UnloadInProgress << std::endl;
+			if (!UnloadInProgress) { m_parent.RequestDllUnload(); }								//ask SDRUno to unload this plugin if not already in progress
+			arg.cancel = true;							// Now, cancel the unload. This prevents the form from closing so saves and clean up happens from the top.
+		});
 
-	
+
 	//Initialize header bar
 	header_bar.size(nana::size(122, 20));
 	header_bar.load(img_header, nana::rectangle(0, 0, 122, 20));
@@ -399,7 +399,7 @@ void SDRunoPlugin_TXLinkForm::Setup()
 	OFSchkbox.transparent(true);
 	OFSchkbox.caption("OFS");
 	OFSchkbox.check(LoadOFS() == "true");
-	
+
 
 	StandbyBtn.caption("Set TX on");
 	StandbyBtn.edge_effects(true);
@@ -429,7 +429,7 @@ void SDRunoPlugin_TXLinkForm::Setup()
 	{
 		move(posX, posY);
 	}
-	
+
 
 
 	// TODO: Extra Form code goes here
@@ -571,8 +571,8 @@ void SDRunoPlugin_TXLinkForm::Setup()
 	PAlevelTb.caption(strPAlevel);		//this triggers event and opens/resets port on startup
 
 	m_timer.interval(std::chrono::milliseconds(5));			//this is just the time between finishing one timer event and starting the next, 
-																//  not the actual timer interval
-	// this next call sets the code to be executed after every interval
+	//  not the actual timer interval
+// this next call sets the code to be executed after every interval
 	m_timer.elapse([&]
 		{
 			try
@@ -597,10 +597,13 @@ void SDRunoPlugin_TXLinkForm::Setup()
 
 	LoadRTCdelay();
 	udp_poller.interval(std::chrono::milliseconds(10));
-	//udp_poller.start();
+	//udp_poller.start();		// NOT STARTED - left over from the old dual-timer design;
+								// UDP processing now happens via OnTimer() -> ProcessUDPEvent()
+								// every m_timer tick instead (see OnTimer above), to avoid the
+								// cross-timer re-entrancy issue two independent Nana timers caused.
 	udp_poller.elapse([&] {
 		udp_poller.stop();						// Stop it immediately so it only runs once
-		if (UDPevent) { ProcessUDPEvent(); }	// Run your sequencing logic
+		ProcessUDPEvent();						// drains UDPStatusQueue internally; safe even if called
 		udp_poller.start();						// Restart the timer for the next event
 		});
 
@@ -708,7 +711,7 @@ void SDRunoPlugin_TXLinkForm::OnTimer()
 		return;										//skip the rest of the code in this elapse function if UnloadInProgress
 	}
 
-	if (UDPevent) { TRY_STEP("ProcessUDPEvent", ProcessUDPEvent()); }		//moved from its own timer because of thread re-entry with dual timers
+	TRY_STEP("ProcessUDPEvent", ProcessUDPEvent());		//now drains UDPStatusQueue internally; cheap no-op if empty
 
 	TRY_STEP("CheckWindowState", CheckWindowState());					//check if main SDRuno window minimized or restored
 
@@ -849,7 +852,7 @@ void SDRunoPlugin_TXLinkForm::DrainFreqQueue()
 	}
 	if (hasUpdate)
 	{
-		
+
 	}
 }
 
@@ -935,7 +938,7 @@ void SDRunoPlugin_TXLinkForm::ProcessIncomingSerial()
 		if (std::chrono::steady_clock::now() - startTime > maxDuration)
 		{
 			string str = "\r\n" + get_millis() + " ProcessIncomingSerial: time budget exceeded, "
-							+ "defer to next tick. LastMsg = \"" + LastMsg + "\"";
+				+ "defer to next tick. LastMsg = \"" + LastMsg + "\"";
 			if (NewMsg != "") str += ", NewMsg = \"" + NewMsg + "\"";
 			str += "\r\n\r\n";
 			std::cout << str;		//this helps avoid splitting line in console
@@ -959,7 +962,7 @@ void SDRunoPlugin_TXLinkForm::ProcessIncomingSerial()
 			else if (NewMsg == "~TX")					//init message from TXlink Arduino
 			{
 				//so send all the initial data to TXlink Arduino
-				if (Serial.Connected()) {		
+				if (Serial.Connected()) {
 					//force a freq update here as it can be 20-30seconds after DLL load before TXlink Arduino resets and sends ~TX
 					string str = "{F" + std::to_string((int64_t)CurrentTXfreq) + "}";
 					std::cout << get_millis() << " SDRunoPlugin_TXLinkForm::ProcessIncomingSerial() - Arduino ~TX received - init TXfreq = " << str << std::endl;
@@ -982,7 +985,7 @@ void SDRunoPlugin_TXLinkForm::ProcessIncomingSerial()
 			{
 				VRX0mute = m_controller.GetAudioMute(0);
 				VRX1mute = m_controller.GetAudioMute(1);
-				if (!DiagnosticTX) {				
+				if (!DiagnosticTX) {
 					m_controller.SetAudioMute(0, true);
 					m_controller.SetAudioMute(1, true);
 				}
@@ -1012,7 +1015,7 @@ void SDRunoPlugin_TXLinkForm::ProcessIncomingSerial()
 				if (__ms > 10) {
 					std::cout << get_millis() << " SWRREFtxt.caption() took " << __ms << "ms" << std::endl;
 				}
-				
+
 			}
 			else if (NewMsg.substr(0, 1) == "S")
 			{
@@ -1023,7 +1026,7 @@ void SDRunoPlugin_TXLinkForm::ProcessIncomingSerial()
 				if (__ms > 10) {
 					std::cout << get_millis() << " SWRSWRtxt.caption() took " << __ms << "ms" << std::endl;
 				}
-				
+
 			}
 			else if (NewMsg.substr(0, 1) == "T")
 			{
@@ -1035,7 +1038,7 @@ void SDRunoPlugin_TXLinkForm::ProcessIncomingSerial()
 				if (__ms > 10) {
 					std::cout << get_millis() << " SetTXtemp.caption() took " << __ms << "ms" << std::endl;
 				}
-				
+
 			}
 			else if (NewMsg.substr(0, 1) == "D")				//force TX off due to TXtempLimit exceeded
 			{
@@ -1081,122 +1084,123 @@ void SDRunoPlugin_TXLinkForm::ProcessUDPEvent()
 {													//called from Form timer event to process wsjtx UDP	
 	//WSJT_X FT8 UDP request?
 
-	std::lock_guard<std::mutex> lock(UDPEvent_mtx);                     // Locks the UDPEvent mutex
-	if (UDPevent.exchange(false, std::memory_order_acq_rel))			//set from UDP thread when wsjtx message received
+	// Drain ALL pending events but only act on the LATEST one's full contents.
+	// Preserves the old "don't act on a stale intermediate frequency/state if
+	// several packets queued up before we got here" behaviour, without needing
+	// a cross-thread flag - intermediate events are simply superseded.
+	UDPStatusEvent latest;
+	bool hasEvent = false;
+	UDPStatusEvent tmp;
+	while (UDPStatusQueue.try_pop(tmp))
 	{
-		//following logic to handle correct mode restore on startup
-		static bool FirstTime = true;				//first time in this function so maybe ignore wsjtx for now?
-		if (FirstTime && SplitMode != SplitFT8)     //only reset datamode when SplitModeFT8 has been restored on startup
+		latest = tmp;
+		hasEvent = true;
+	}
+
+	if (!hasEvent) { return; }
+
+	m_lastUDPStatus = latest;		// Form-owned copy, safe for button handlers/millisToEnd to read anytime afterward
+	if (latest.txModeChanged) { m_txModeChangePending = true; }
+
+	//following logic to handle correct mode restore on startup
+	static bool FirstTime = true;				//first time in this function so maybe ignore wsjtx for now?
+	if (FirstTime && SplitMode != SplitFT8)     //only reset datamode when SplitModeFT8 has been restored on startup
+	{
+		if (latest.newFrequency > 0) { FirstTime = false; }			//wait until wsjtx first changes freq to set data mode if datamode was not restored on startup
+		return;
+	}
+
+	FirstTime = false;		//setup data mode on first UDP event only when SplitFT8 restored in data mode
+
+	bool is_sent = false;
+	long TXtimeToEnd = 0;
+	if (Serial.Connected())
+	{
+		//always update freq when changed in wsjtx
+		if (latest.newFrequency > 0)			//user changed band / mode in wsjtx
 		{
-			if (newFrequency > 0) { newFrequency = 0; FirstTime = false; }			//wait until wsjtx first changes freq to set data mode if datamode was not restored on startup
-			UDPevent = false;
-			return; 
-		}		
-
-		FirstTime = false;		//setup data mode on first UDP event only when SplitFT8 restored in data mode
-
-		//std::cout << "SDRunoPlugin_TXLinkForm::ProcessIncomingSerial() UDPevent = true" << std::endl;
-		bool is_sent = false;
-		long TXtimeToEnd = 0;
-		if (Serial.Connected())
-		{
-			//always update freq when changed in wsjtx
-			if (newFrequency > 0)			//user changed band / mode in wsjtx
-			{
-				CurrentWSJTXfreq = static_cast<double>(newFrequency);					//local form master setting
-				newFrequency = 0;									//handshake for server; 
-				SetupDataMode();
-			}
-
-			std::string str = "{X0}";
-			std::string strW = "";			//for W message to set time to end of TX
-			if (dataChanged)
-			{
-				//refresh TX data - this will usually be after wsjtx decodes but before next TX start period
-				str = "{M8}";
-				if (WSJTX_TXmodeStr == "FT4") { str = "{M4}"; }
-				if (WSJTX_TXmodeStr == "FT2") { str = "{M2}"; }
-				//is_sent = Serial.WriteSerialPort(str);
-
-				str = str + "{Y" + to_string(TXDF) + "}";
-				//is_sent = Serial.WriteSerialPort(str);
-
-				str = str + "{Z" + TXsymbols + "}";
-				is_sent = Serial.WriteSerialPort(str);
-			}
-
-			str = "{X0}";
-			strW = "";
-			if (TXflg) {
-				//this UDP datagram is sent immediately at start of tx period
-				if (strDecodeMsg != "TUNE")
-				{
-					TXtimeToEnd = millisToEnd();
-				}
-				else
-				{
-					TXtimeToEnd = 30000;		//TUNE for 30 seconds from now
-				}
-				strW = "{W" + to_string(TXtimeToEnd) + "}";
-				//is_sent = Serial.WriteSerialPort(str);
-
-				// TX key on message
-				str = "{X1}";							//if (TXtimeToEnd >= 12000) { str = "{X1}"; }		//only enable if enough time left
-			}
-			//indicate FT8 tx on UI form
-			if (str == "{X0}")
-			{
-				FT8txOnLbl.bgcolor(nana::colors::light_grey);
-			}
-			else           //FT8 TX
-			{
-				DigiTXmodeStr = WSJTX_TXmodeStr;		//save current TX mode
-				FT8Lbl.format(true);
-				FT8Lbl.caption("<bold=true size=10>" + DigiTXmodeStr + "</>");    // FT8Lbl.caption(WSJTX_TXmodeStr);		//FT8Lbl.caption(< bold size = 12>" + "FT8" + " < / > ");
-				FT8txOnLbl.bgcolor(nana::colors::red);
-				
-				SetupDataMode();
-			}
-
-			if (UDPHaltTXevent) {
-				TXtimeToEnd = 0;
-				strW = "{X0}";
-				str = "{W0}";					//force TX to stop (needs this command order)
-				UDPHaltTXevent = false;
-			}
-
-			//send TX last so freq & message updated first in Arduino
-			is_sent = true;
-			if (SplitMode == SplitFT8 && (DigiTXmodeStr == "FT2" || DigiTXmodeStr == "FT4" || DigiTXmodeStr == "FT8"))
-			{
-				str = strW + str;
-				is_sent = Serial.WriteSerialPort(str); //Arduino setup commands will now send in earlier status UDP
-																// then Wn & X1 will be sent here
-			}
-
+			CurrentWSJTXfreq = static_cast<double>(latest.newFrequency);					//local form master setting
+			SetupDataMode();
 		}
-		//if (is_sent) { UDPevent = false; }
-		ShowIsSent(is_sent);
-		FT8msgLbl.caption(strDecodeMsg + " - " + to_string(TXtimeToEnd));
 
-		if (newDXcall != "" && !bLastTenCalls(newDXcall))
+		std::string str = "{X0}";
+		std::string strW = "";			//for W message to set time to end of TX
+		if (latest.dataChanged)
 		{
-			std::string strURL = "https://www.qrz.com/db/" + newDXcall;
-			//std::string command = "start /b chrome \"" + strURL + "\"";
-			//system(command.c_str());
+			//refresh TX data - this will usually be after wsjtx decodes but before next TX start period
+			str = "{M8}";
+			if (latest.txModeStr == "FT4") { str = "{M4}"; }
+			if (latest.txModeStr == "FT2") { str = "{M2}"; }
 
-			std::thread([strURL]()					//do this in a separate thread so it doesn't block the main thread
-				{
-					LPWSTRGuard op("open");
-					LPWSTRGuard app("chrome.exe");
-					LPWSTRGuard url(strURL.c_str());
+			str = str + "{Y" + to_string(latest.txDF) + "}";
 
-					ShellExecute(NULL, op, app, url, NULL, SW_SHOWNORMAL);
-				}).detach();
+			str = str + "{Z" + latest.txSymbols + "}";
+			is_sent = Serial.WriteSerialPort(str);
 		}
-		newDXcall = "";
-		UDPevent = false;
-		//std::cout << "SDRunoPlugin_TXLinkForm::ProcessIncomingSerial() UDPevent = false" << std::endl;
+
+		str = "{X0}";
+		strW = "";
+		if (latest.txFlag) {
+			//this UDP datagram is sent immediately at start of tx period
+			if (latest.decodeMsg != "TUNE")
+			{
+				TXtimeToEnd = millisToEnd();
+			}
+			else
+			{
+				TXtimeToEnd = 30000;		//TUNE for 30 seconds from now
+			}
+			strW = "{W" + to_string(TXtimeToEnd) + "}";
+
+			// TX key on message
+			str = "{X1}";							//if (TXtimeToEnd >= 12000) { str = "{X1}"; }		//only enable if enough time left
+		}
+		//indicate FT8 tx on UI form
+		if (str == "{X0}")
+		{
+			FT8txOnLbl.bgcolor(nana::colors::light_grey);
+		}
+		else           //FT8 TX
+		{
+			DigiTXmodeStr = latest.txModeStr;		//save current TX mode
+			FT8Lbl.format(true);
+			FT8Lbl.caption("<bold=true size=10>" + DigiTXmodeStr + "</>");
+			FT8txOnLbl.bgcolor(nana::colors::red);
+
+			SetupDataMode();
+		}
+
+		if (latest.haltTXevent) {
+			TXtimeToEnd = 0;
+			strW = "{X0}";
+			str = "{W0}";					//force TX to stop (needs this command order)
+		}
+
+		//send TX last so freq & message updated first in Arduino
+		is_sent = true;
+		if (SplitMode == SplitFT8 && (DigiTXmodeStr == "FT2" || DigiTXmodeStr == "FT4" || DigiTXmodeStr == "FT8"))
+		{
+			str = strW + str;
+			is_sent = Serial.WriteSerialPort(str); //Arduino setup commands will now send in earlier status UDP
+			// then Wn & X1 will be sent here
+		}
+
+	}
+	ShowIsSent(is_sent);
+	FT8msgLbl.caption(latest.decodeMsg + " - " + to_string(TXtimeToEnd));
+
+	if (latest.newDXcall != "" && !bLastTenCalls(latest.newDXcall))
+	{
+		std::string strURL = "https://www.qrz.com/db/" + latest.newDXcall;
+
+		std::thread([strURL]()					//do this in a separate thread so it doesn't block the main thread
+			{
+				LPWSTRGuard op("open");
+				LPWSTRGuard app("chrome.exe");
+				LPWSTRGuard url(strURL.c_str());
+
+				ShellExecute(NULL, op, app, url, NULL, SW_SHOWNORMAL);
+			}).detach();
 	}
 }
 
@@ -1204,7 +1208,7 @@ void SDRunoPlugin_TXLinkForm::ReTransmit() {
 	//diagnostic only
 
 	uint64_t Ms = GetCurrentTimeMs();
-	int slotPeriod = WSJTX_TXmodeStr == "FT2" ? 3750 : (WSJTX_TXmodeStr == "FT4" ? 7500 : 15000);
+	int slotPeriod = m_lastUDPStatus.txModeStr == "FT2" ? 3750 : (m_lastUDPStatus.txModeStr == "FT4" ? 7500 : 15000);
 	Ms = Ms % slotPeriod;
 	while (Ms > 10)
 	{
@@ -1235,7 +1239,7 @@ void SDRunoPlugin_TXLinkForm::SetupDataMode()
 		SetRXFreq();									//sets both vfos to CurrentTXfreq
 		SendTXfreq();									//update TX hardware
 	}
-	CurrentRXfreq = CurrentTXfreq + TXDF;
+	CurrentRXfreq = CurrentTXfreq + m_lastUDPStatus.txDF;
 
 	double f0 = GetVfoFrequencySafe(m_controller, 0);
 	double f1 = GetVfoFrequencySafe(m_controller, 1);
@@ -1246,13 +1250,13 @@ void SDRunoPlugin_TXLinkForm::SetupDataMode()
 	m_parent._updateRX_AnnoEntry("FTX", "", (int64_t)CurrentRXfreq);
 	m_controller.SetDemodulatorType(0, m_controller.DemodulatorUSB);
 	FixFreqBtn.caption("UnSplit");
-	if (TXmodeChange)
+	if (m_txModeChangePending)
 	{
 		int bndw = FilterBandwidthFT8;
 		if (DigiTXmodeStr == "FT4") { bndw = FilterBandwidthFT4; }
 		if (DigiTXmodeStr == "FT2") { bndw = FilterBandwidthFT2; }
 		m_controller.SetFilterBandwidth(0, bndw);
-		TXmodeChange = false;
+		m_txModeChangePending = false;
 	}
 }
 
@@ -1648,7 +1652,7 @@ void SDRunoPlugin_TXLinkForm::FixFreqBtnClicked()
 			SplitMode = SplitNone;
 		}
 		freqTb.bgcolor(nana::colors::white);
-		
+
 		FT8Lbl.fgcolor(nana::colors::white);
 		FT8Lbl.transparent(true);
 		freqTb.fgcolor(nana::colors::black);
@@ -1674,7 +1678,7 @@ void SDRunoPlugin_TXLinkForm::FixFreqBtnClicked()
 void SDRunoPlugin_TXLinkForm::AtuBtnClicked()
 {
 	// Open Atu dialog - one only
-	
+
 	if (!bATUformOpen)
 	{
 		//Create a new settings dialog object
@@ -1687,7 +1691,7 @@ void SDRunoPlugin_TXLinkForm::AtuBtnClicked()
 		//Attach a handler to the settings dialog close event
 		m_atuDialog->events().unload([&] { AtuDialog_Closed(); });
 		bATUformOpen = true;
-		
+
 		//Show the setttings dialog
 		m_atuDialog->Run();
 	}
@@ -1721,9 +1725,9 @@ void SDRunoPlugin_TXLinkForm::DXspotBtnClicked()
 		return;
 	}
 
-	if (DXcall != "")
+	if (m_lastUDPStatus.dxCall != "")
 	{
-		strDXspot += " " + DXcall;
+		strDXspot += " " + m_lastUDPStatus.dxCall;
 
 		//remove "<" and ">" from DXcall
 		char charToRemove = '<';
@@ -1747,9 +1751,9 @@ void SDRunoPlugin_TXLinkForm::DXspotBtnClicked()
 		return;
 	}
 
-	if (strReport != "")
+	if (m_lastUDPStatus.report != "")
 	{
-		strDXspot += " " + strReport + "dB";
+		strDXspot += " " + m_lastUDPStatus.report + "dB";
 	}
 	else
 	{
@@ -1757,9 +1761,9 @@ void SDRunoPlugin_TXLinkForm::DXspotBtnClicked()
 		//return;
 	}
 
-	if (RxDF != 0)
+	if (m_lastUDPStatus.rxDF != 0)
 	{
-		strDXspot += " " + std::to_string(RxDF) + "Hz";
+		strDXspot += " " + std::to_string(m_lastUDPStatus.rxDF) + "Hz";
 	}
 	else
 	{
@@ -1767,9 +1771,9 @@ void SDRunoPlugin_TXLinkForm::DXspotBtnClicked()
 		return;
 	}
 
-	if (DXgrid != "")
+	if (m_lastUDPStatus.dxGrid != "")
 	{
-		strDXspot += " Loc: " + DXgrid;
+		strDXspot += " Loc: " + m_lastUDPStatus.dxGrid;
 	}
 	else
 	{
@@ -2079,7 +2083,7 @@ bool SDRunoPlugin_TXLinkForm::GetOFSchkbox()
 void SDRunoPlugin_TXLinkForm::SettingsButton_Click()
 {
 	//Create a new settings dialog object
-	SDRunoPlugin_TemplateSettingsDialog settingsDialog{ m_parent,m_controller};
+	SDRunoPlugin_TemplateSettingsDialog settingsDialog{ m_parent,m_controller };
 
 	//disable this form so settings dialog retains top level focus
 	this->enabled(false);
@@ -2117,8 +2121,8 @@ long SDRunoPlugin_TXLinkForm::millisToEnd() {
 
 	//calc millis to end of this period relative to world UTC
 	long millisToEnd = (15000 - (GetCurrentTimeMs() + RTCdelay) % 15000 - 150);								//FT8 15sec slot
-	if (WSJTX_TXmodeStr == "FT4") { millisToEnd = (7500 - (GetCurrentTimeMs() + RTCdelay) % 7500 - 50); }   //7.5sec slot
-	if (WSJTX_TXmodeStr == "FT2") { millisToEnd = (3750 - (GetCurrentTimeMs() + RTCdelay) % 3750); }		//3.75sec slot
+	if (m_lastUDPStatus.txModeStr == "FT4") { millisToEnd = (7500 - (GetCurrentTimeMs() + RTCdelay) % 7500 - 50); }   //7.5sec slot
+	if (m_lastUDPStatus.txModeStr == "FT2") { millisToEnd = (3750 - (GetCurrentTimeMs() + RTCdelay) % 3750); }		//3.75sec slot
 
 	return millisToEnd;
 }

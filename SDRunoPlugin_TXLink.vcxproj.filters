@@ -152,6 +152,9 @@
     <ClInclude Include="SDRUnoHelper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="UDPStatusEvent.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="SDRunoPlugin_TXLink.rc">

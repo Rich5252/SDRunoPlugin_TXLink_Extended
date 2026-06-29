@@ -34,33 +34,54 @@ using namespace std;
 
 //externals that provide the simple comms to the plugin
 std::atomic <bool> UDPExitRequest = false;
-std::atomic <bool> UDPevent = false;          //set to indicate new status update
-std::mutex UDPEvent_mtx;
 
 ThreadSafeMessageQueue<std::string> WSJTX_UDPInQ;            //TODO data from wsjtx to plugin
 ThreadSafeMessageQueue<uint64_t> WSJTX_UDPOutQ;           //data from plugin to wsjtx (SetFreq)
 
-bool UDPHaltTXevent = false;    // force immediate TX halt
-bool TXflg = false;
-int TXDF = 0;
-std::string WSJTX_TXmodeStr = "FT8";
-std::string LastTXmsg = ""; 
-bool TXmodeChange = true;
-std::string DXcall = "";
-std::string DXgrid = "";
-std::string newDXcall = "";
-std::string strReport = "";
-uint32_t RxDF = 0;
-std::string strDecodeMsg = "NOCALL";
-uint64_t curFrequency = 0;                  //local store
-uint64_t curTXFrequency = 0;                  //from form
-uint64_t newFrequency = 0;                  // non zero ifchanged (extern)
-bool dataChanged = false;                        //set when new data received from wsjtx to trigger form update
-bool msgChanged = false;                         //set when new message received from wsjtx to trigger form update
-bool TXeven = true;
-bool TXenabled = false;
-bool TXpreempted = false;           //Preemptive TX has started
-uint64_t  PreemptiveTXstartMs = 0;  //  start time
+// Single queue carrying complete UDPStatusEvent snapshots from this UDP thread
+// to the Form thread. Replaces the old UDPevent flag + UDPEvent_mtx + the
+// ~13 independent extern globals that used to be written here and read
+// directly (with only partial synchronisation) on the Form thread.
+ThreadSafeMessageQueue<UDPStatusEvent> UDPStatusQueue;
+
+// --- UDP-thread-local working/decision state ---
+// These never need to cross threads: they exist purely to help ProcessPacket()
+// and PreemptiveTXCheck() decide what to put into the NEXT UDPStatusEvent.
+// They stay as plain globals/statics confined to this translation unit/thread.
+// (EncodeMessage() writes strDecodeMsg as a side-effect, so it can't be a
+// purely-local variable inside ProcessPacket - it needs this thread-confined
+// static so EncodeMessage's outcome is visible to the code that builds the event.)
+static std::string WSJTX_TXmodeStr = "FT8";
+static std::string strDecodeMsg = "NOCALL";
+static std::string LastTXmsg = "";
+static bool TXmodeChange = true;
+static uint64_t curFrequency = 0;                  //local store
+static bool msgChanged = false;                    //local decision state for TXeven logic
+static bool TXeven = true;
+static bool TXenabled = false;
+static bool TXpreempted = false;                    //Preemptive TX has started
+static uint64_t PreemptiveTXstartMs = 0;            //start time
+
+// Remembers the most recently pushed FULL UDPStatusEvent (from ProcessPacket).
+// PreemptiveTXCheck() builds its own event as a copy of this rather than a
+// fresh, mostly-blank UDPStatusEvent - otherwise, if its minimal event happens
+// to be the LAST one popped during the Form's coalescing drain, it overwrites
+// m_lastUDPStatus with blank dxCall/dxGrid/report/rxDF/etc, silently corrupting
+// the Form's view of state until the next full status packet arrives.
+static UDPStatusEvent lastFullEvent;
+
+// Carry-forward "last known value" state - the old globals served both as
+// "current value" and "value to send to Form"; these statics keep that same
+// carry-forward behaviour (e.g. txSymbols/DXcall stay the same across packets
+// where nothing changed) without exposing the value to the Form thread directly.
+static bool TXflgLocal = false;
+static int TXDFLocal = 0;
+static std::string TXsymbolsLocal = "3140652002457262353553516142250015633140652505007562410457700470324420543140652";
+static std::string DXcallLocal = "";
+static std::string DXgridLocal = "";
+static std::string strReportLocal = "";
+static uint32_t RxDFLocal = 0;
+
 int RTCdelay = 300;			//delay in ms currently applied to RTC
 int RTCdelayOffset = 0;		//local offset from Settings that reduces RTCdelay value
 int RTCcurrentDelay = 300;	//current delay in ms applied to RTC - updated from NamedPipe
@@ -69,7 +90,7 @@ int RTCcurrentDelay = 300;	//current delay in ms applied to RTC - updated from N
 std::string FT8TXsymbols = "3140652002457262353553516142250015633140652505007562410457700470324420543140652";       //"NOCALL"
 std::string FT8TxNoSymbols = "0000000000000000000000000000000000000000000000000000000000000000000000000000000";
 std::string strFT8WSJTXpath = "C:\\WSJT\\wsjtx\\bin\\ft8code.exe";         // must use double \\ (or /). This is emcapsulated in "" so can have spaces.
-                                                                        // path is stored in SDRuno ini file (wsjtxPath) and can be modified manually if required.
+// path is stored in SDRuno ini file (wsjtxPath) and can be modified manually if required.
 
 std::string FT4TXsymbols = "001321033112330313210320122110210110232220103032312323100312203003023102222320131323332231310212123032010";     //"NOCALL"
 std::string FT4TxNoSymbols = "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
@@ -122,7 +143,7 @@ NamedPipeServer UDPpipe(PIPE_NAME, BUFSIZE);					//get messages from RTCupdater 
 // status update to the plugin is via the simple extern data values above.
 void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _parent)
 {
-	m_parent = &_parent;    // Set the global reference to the parent plugin instance
+    m_parent = &_parent;    // Set the global reference to the parent plugin instance
 
     sockaddr_in server{}, client{};
 
@@ -137,7 +158,7 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
     std::cout << get_millis() << "Initialised." << std::endl;
 
     // create a socket
-  
+
     if ((server_socket = socket(AF_INET, SOCK_DGRAM, 0)) == INVALID_SOCKET)
     {
         std::cout << get_millis() << "Could not create socket: " << WSAGetLastError() << std::endl;
@@ -167,13 +188,13 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
         // Decide if you want to exit or log a warning and continue without timeout
     }
 
-	UDPpipe.createAndListenAsync();     //init NamedPipeServer to listen for RTC delay updates
+    UDPpipe.createAndListenAsync();     //init NamedPipeServer to listen for RTC delay updates
 
-	int waitCount = 0;
+    int waitCount = 0;
     while (!UDPExitRequest)
     {
         //check NamedPipe connection and get any update of the offset value
-		if (UDPpipe.pollConnection())
+        if (UDPpipe.pollConnection())
         {
             std::string msg;
             if (UDPpipe.pollData(msg))
@@ -182,7 +203,7 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
                 try {
                     int newDelay = std::stoi(msg);
                     RTCcurrentDelay = static_cast<uint64_t>(newDelay);
-                    
+
                     RTCdelay = RTCcurrentDelay - RTCdelayOffset;
                     RTCdelay < 50 ? RTCdelay = 50 : RTCdelay;
                     std::cout << std::endl;
@@ -191,7 +212,7 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
                 catch (const std::exception& e) {
                     std::cout << std::endl;
                     std::cerr << get_millis() << "Error parsing RTC delay from pipe message: " << msg << ". Exception: " << e.what() << std::endl;
-				}
+                }
             }
         }
 
@@ -201,7 +222,7 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
         int message_len;
         int slen = sizeof(sockaddr_in);
 
-		// Use recvfrom with a timeout
+        // Use recvfrom with a timeout
         message_len = recvfrom(server_socket, message, BUFLEN, 0, (sockaddr*)&client, &slen);
         if (message_len == SOCKET_ERROR)
         {
@@ -211,11 +232,11 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
                 // This is the expected timeout error, just continue the loop
                 // to check UDPExitRequest. No message was received.
 
-				if (waitCount == 0) { std::cout << std::endl << "UDP waiting : "; }
+                if (waitCount == 0) { std::cout << std::endl << "UDP waiting : "; }
                 //std::cout << " " << ++waitCount;
                 if ((++waitCount % 10) == 0) { std::cout << " " << waitCount; }
 
-				PreemptiveTXCheck();   // Check for preemptive TX conditions during wait
+                PreemptiveTXCheck();   // Check for preemptive TX conditions during wait
 
                 continue; // Go back to the top of the loop to check UDPExitRequest
             }
@@ -237,72 +258,70 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
         }
         else
         {
-			if (waitCount > 0) { std::cout << std::endl; }
+            if (waitCount > 0) { std::cout << std::endl; }
             // Message received successfully
             if (UDPExitRequest) {
                 std::cout << get_millis() << "UDP Exit Request received, exiting server loop without processing received packet." << std::endl;
                 break; // Exit the loop if exit request is set
-			}
+            }
 
             waitCount = 0;                              // Reset wait count on successful receive
-			std::string strPacketType = ProcessPacket(message, message_len);
+            std::string strPacketType = ProcessPacket(message, message_len);
 
-			//diagnostic output
-			uint64_t ms = GetCurrentTimeMs();
+            //diagnostic output
+            uint64_t ms = GetCurrentTimeMs();
             int slotPeriod = WSJTX_TXmodeStr == "FT2" ? 3750 : (WSJTX_TXmodeStr == "FT4" ? 7500 : 15000);
-			string str1 = get_millis() + "UDP packet : " + strPacketType + " " + FormatUtcTime(ms) + " DTC: " + to_string(ms % slotPeriod) + "\r\n";
-			std::cout <<  str1;
-        
+            string str1 = get_millis() + "UDP packet : " + strPacketType + " " + FormatUtcTime(ms) + " DTC: " + to_string(ms % slotPeriod) + "\r\n";
+            std::cout << str1;
+
         }
 
-	}                   //loop until UDPExitRequest is set
+    }                   //loop until UDPExitRequest is set
 
-	// Cleanup
-	std::cout << "\n" << get_millis() << "UDP Server cleanup..." << std::endl;
-	UDPpipe.close();                // Ensure the NamedPipeServer is closed properly
+    // Cleanup
+    std::cout << "\n" << get_millis() << "UDP Server cleanup..." << std::endl;
+    UDPpipe.close();                // Ensure the NamedPipeServer is closed properly
     closesocket(server_socket);
     WSACleanup();
 }
 
 void PreemptiveTXCheck()
 {
-	if (RTCdelay <= 50) { return; }     //if delay is minimal dont preempt - allow wsjtx to control (so can introduce longer delays)
+    if (RTCdelay <= 50) { return; }     //if delay is minimal dont preempt - allow wsjtx to control (so can introduce longer delays)
 
     uint64_t ms = GetCurrentTimeMs();
     int slotPeriod = WSJTX_TXmodeStr == "FT2" ? 3750 : (WSJTX_TXmodeStr == "FT4" ? 7500 : 15000);
-	int SlotNumber = ms % 60000 / slotPeriod;                     //current slot number in minute (0-15)
-	int TimeInSlot = ms % slotPeriod;
-	int TimeToNextSlot = slotPeriod - TimeInSlot;
-	bool inTxSlot = (((ms / slotPeriod) % 2) == 0) == TXeven;   //true if we are in the TX slot for the current even/odd setting
+    int SlotNumber = ms % 60000 / slotPeriod;                     //current slot number in minute (0-15)
+    int TimeInSlot = ms % slotPeriod;
+    int TimeToNextSlot = slotPeriod - TimeInSlot;
+    bool inTxSlot = (((ms / slotPeriod) % 2) == 0) == TXeven;   //true if we are in the TX slot for the current even/odd setting
 
-	// Preemptive TX start - start in previous slot if enabled and not already preempted
+    // Preemptive TX start - start in previous slot if enabled and not already preempted
     if (strDecodeMsg != "TUNE" && TXenabled && !inTxSlot && TimeToNextSlot < (RTCdelay) && !TXpreempted)   //note we start TX in previous slot
     {                                   //expeimental - tx early cf PC RTC since PC clock delayed for SDR etc
-        //should wait for any current UDP event to complete in Form
-        int sleeps = 0;
-        while (UDPevent && sleeps < 5 && !UDPExitRequest)
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));         //wait for previous event to be processed
-            sleeps++;
-        }
         PreemptiveTXstartMs = GetCurrentTimeMs();
-		string str1 = ( TXeven ? " TX even. " : " TX odd. " );
+        string str1 = (TXeven ? " TX even. " : " TX odd. ");
         string str2 = "\r\n" + get_millis() + "Preemptive TX: " + FormatUtcTime(PreemptiveTXstartMs) + " Slot: " + to_string(SlotNumber) + " DTC: " + to_string(PreemptiveTXstartMs % slotPeriod) + str1 + "RTCdelay: " + to_string(RTCdelay) + "\r\n";
         std::cout << str2;
         TXpreempted = true;      //indicates when Preempted TX has started. Reset when next packet received (checking correct slot)
 
-        std::lock_guard<std::mutex> lock(UDPEvent_mtx);
-        TXflg = true;            //force TX now
-        UDPevent = true;         //flag for main UDP server code to update Arduino - avoid handshake race
+        // Build the event as a copy of the most recent FULL snapshot, only
+        // overriding the fields this preemptive-start actually changes.
+        // (NOT a fresh, blank UDPStatusEvent - see lastFullEvent's comment for why.)
+        UDPStatusEvent evt = lastFullEvent;
+        evt.txFlag = true;            //force TX now
+        evt.txModeStr = WSJTX_TXmodeStr;
+        evt.decodeMsg = strDecodeMsg;
+        UDPStatusQueue.push(evt);      //queue push is itself thread-safe; no separate flag/mutex needed
     }
 }
 
-std::string ProcessPacket(char * message, int message_len)
+std::string ProcessPacket(char* message, int message_len)
 {
     std::vector<uint8_t> pkt(message, message + message_len);
     size_t idx = 0;
-    
-    WSJTX_Packet NewPacket( pkt, idx);
+
+    WSJTX_Packet NewPacket(pkt, idx);
     NewPacket.Decode();
 
     if (NewPacket.PacketType == 0) {
@@ -312,12 +331,10 @@ std::string ProcessPacket(char * message, int message_len)
         // emit UI update signal for heartbeat if needed
     }
     else if (NewPacket.PacketType == 1) {
-        //std::lock_guard<std::mutex> lock(UDPEvent_mtx);
-
-		std::string ret = "Status";
+        std::string ret = "Status";
 
         //status packet contains next ft8 message and TX on/off updates
-        WSJTX_Status StatusPacket( pkt, NewPacket.index);
+        WSJTX_Status StatusPacket(pkt, NewPacket.index);
         StatusPacket.Decode();
 
         //std::cout << "Status decode. Frequency = " << StatusPacket.Frequency << " Mode = " << StatusPacket.Mode << " TxEnabled = " << StatusPacket.TxEnabled << std::endl;
@@ -325,87 +342,114 @@ std::string ProcessPacket(char * message, int message_len)
         std::string msg = StatusPacket.DefaultTXMessage;
         msg = removeTrailingSpaces(msg);
 
-        std::cout << "\n" << get_millis() << "DefaultTXMessage = " << '"' <<StatusPacket.DefaultTXMessage << '"' << std::endl;
+        std::cout << "\n" << get_millis() << "DefaultTXMessage = " << '"' << StatusPacket.DefaultTXMessage << '"' << std::endl;
 
-		if (msg == "") { msg = "CQ G4AHN IO91"; }                           //default message if empty
+        if (msg == "") { msg = "CQ G4AHN IO91"; }                           //default message if empty
 
-    //  Following no longer required with mutex protection
-        if (UDPevent) { std::cout << "UDP_Server: ******* WARNING ************  UDP event already set\r\n"; }
-		int sleeps = 0;
-        while (UDPevent && sleeps < 50)
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));         //wait for previous event to be processed
-            sleeps++;
-			if (UDPExitRequest) { return "UDP_Server: UDPExitRequest"; } // exit if requested
-        } 
-        if (sleeps > 0) { std::cout << get_millis() << " UDP event wait: " << sleeps << " times" << std::endl; }
-        std::lock_guard<std::mutex> lock(UDPEvent_mtx);
-    //*/  
-        dataChanged = false;   //reset data changed flag - set to true if any data changes below
-        if (StatusPacket.Frequency != curFrequency && newFrequency == 0)
+        // Build the outgoing event locally - nothing shared is touched until
+        // the single UDPStatusQueue.push() at the end. No flag, no wait-loop,
+        // no possibility of two threads seeing a half-written snapshot.
+        UDPStatusEvent evt;
+
+        bool dataChanged = false;   //local now - reset each packet, set true if any data changes below
+        uint64_t newFrequency = 0;
+        if (StatusPacket.Frequency != curFrequency)
         {
             newFrequency = StatusPacket.Frequency;
-            curFrequency = newFrequency;                //reset to zero in form when UDPevent detected
-			dataChanged = true;
+            curFrequency = newFrequency;
+            dataChanged = true;
         }
         if (WSJTX_TXmodeStr != StatusPacket.Mode) { TXmodeChange = true; dataChanged = true; }
         WSJTX_TXmodeStr = StatusPacket.Mode;
-        if (TXflg && !StatusPacket.Transmitting && !StatusPacket.TxEnabled) { UDPHaltTXevent = true; }
-		TXflg = StatusPacket.Transmitting;  //transmit on/off
-		if (TXDF != StatusPacket.TxDF) { dataChanged = true; }
-        TXDF = StatusPacket.TxDF;           //transmit freq offset added to set TX freq
-		msgChanged = false;
+
+        bool haltTXevent = false;
+        if (TXflgLocal && !StatusPacket.Transmitting && !StatusPacket.TxEnabled) { haltTXevent = true; }
+        bool txFlag = StatusPacket.Transmitting;  //transmit on/off
+        if (TXDFLocal != StatusPacket.TxDF) { dataChanged = true; }
+        TXDFLocal = StatusPacket.TxDF;           //transmit freq offset added to set TX freq
+
+        msgChanged = false;
+        std::string txSymbols = TXsymbolsLocal;   //carry forward unless changed below
         if (LastTXmsg == "" || LastTXmsg != msg)
         {
-            TXsymbols = EncodeMessage(WSJTX_TXmodeStr, msg);         //list of tones to transmit
-			dataChanged = true;
-			msgChanged = true;
+            txSymbols = EncodeMessage(WSJTX_TXmodeStr, msg);         //list of tones to transmit
+            dataChanged = true;
+            msgChanged = true;
         }
         else
         {
             ret = ret + ": Msg unchanged: " + msg;
         }
-		LastTXmsg = msg;                                                                        //store last message sent   
-        if (StatusPacket.DXCall != DXcall) { newDXcall = StatusPacket.DXCall; }
-        DXcall = StatusPacket.DXCall;
-		DXgrid = StatusPacket.DXgrid;
-		strReport = StatusPacket.Report;    //report to send
-		RxDF = StatusPacket.RxDF;       //receive freq offset
+        LastTXmsg = msg;                                                                        //store last message sent
+        TXsymbolsLocal = txSymbols;
+        TXflgLocal = txFlag;
+
+        std::string newDXcall;
+        if (StatusPacket.DXCall != DXcallLocal) { newDXcall = StatusPacket.DXCall; }
+        DXcallLocal = StatusPacket.DXCall;
+        DXgridLocal = StatusPacket.DXgrid;
+        strReportLocal = StatusPacket.Report;    //report to send
+        RxDFLocal = StatusPacket.RxDF;       //receive freq offset
 
         //special handling for the Preemptive TX, remember tx period
-		int slotPeriod = WSJTX_TXmodeStr == "FT2" ? 3750 : (WSJTX_TXmodeStr == "FT4" ? 7500 : 15000);
-		TXenabled = StatusPacket.TxEnabled;
+        int slotPeriod = WSJTX_TXmodeStr == "FT2" ? 3750 : (WSJTX_TXmodeStr == "FT4" ? 7500 : 15000);
+        TXenabled = StatusPacket.TxEnabled;
         if (TXenabled)
         {
-			uint64_t ms = GetCurrentTimeMs();
+            uint64_t ms = GetCurrentTimeMs();
             int DTC = ms % slotPeriod;
             if (TXpreempted && (ms - PreemptiveTXstartMs) < 1000 && !StatusPacket.Transmitting)
-                       // We are in the slot following preemptive TX but wsjtx says not TX so must mean slot was wrong
-                        // so do a halt TX
+                // We are in the slot following preemptive TX but wsjtx says not TX so must mean slot was wrong
+                 // so do a halt TX
             {
-                UDPHaltTXevent = true;
+                haltTXevent = true;
                 TXpreempted = false;
                 string str1 = get_millis() + "Preemptive TX Halt. DTC: " + to_string(DTC) + "\r\n";
-				std::cout << str1;
+                std::cout << str1;
             }
 
-			bool even = (ms / slotPeriod) % 2 == 0;
-			int SlotTimeLeft = slotPeriod - DTC;
+            bool even = (ms / slotPeriod) % 2 == 0;
+            int SlotTimeLeft = slotPeriod - DTC;
             if (StatusPacket.Transmitting)   TXeven = even;              //can only be certain when wsjtx is tx'ing
             if (!msgChanged && !StatusPacket.Transmitting && TXenabled && SlotTimeLeft > 3000) TXeven = !even;
-			string str1 = dataChanged ? " Data changed. " : " Data unchanged. ";
-			string str2 = msgChanged ? " Message changed. " : " Message unchanged. ";
-			string str3 = TXeven ? " TXslot Even " : " TXslot Odd ";
-			string str4 = StatusPacket.Transmitting ? " Transmitting. " : " Not transmitting. ";
-			string str5 = TXenabled ? " TXenabled. " : " TXdisabled. ";
+            string str1 = dataChanged ? " Data changed. " : " Data unchanged. ";
+            string str2 = msgChanged ? " Message changed. " : " Message unchanged. ";
+            string str3 = TXeven ? " TXslot Even " : " TXslot Odd ";
+            string str4 = StatusPacket.Transmitting ? " Transmitting. " : " Not transmitting. ";
+            string str5 = TXenabled ? " TXenabled. " : " TXdisabled. ";
             std::cout << get_millis() << str1 << str2 << str5 << str3 << str4 << " Slot: " << (ms % 60000) / slotPeriod << " SlotTimeLeft: " << SlotTimeLeft << std::endl;
         }
         if (StatusPacket.Transmitting)  TXpreempted = false;            //reset preemptive flag when actual TX starts
 
-		if (!UDPHaltTXevent) PreemptiveTXCheck();                // Check for preemptive TX conditions after processing status update 
+        // Populate and push the complete event - single source of truth for
+        // this packet, consumed as one atomic unit by the Form thread.
+        evt.newFrequency = newFrequency;
+        evt.dataChanged = dataChanged;
+        evt.txDF = TXDFLocal;
+        evt.txSymbols = TXsymbolsLocal;
+        evt.txFlag = TXflgLocal;
+        evt.txModeStr = WSJTX_TXmodeStr;
+        evt.haltTXevent = haltTXevent;
+        evt.txModeChanged = TXmodeChange;
+        TXmodeChange = false;      // one-shot: consumed into this event, reset for next packet
+        evt.newDXcall = newDXcall;
+        evt.decodeMsg = strDecodeMsg;
+        evt.dxCall = DXcallLocal;
+        evt.dxGrid = DXgridLocal;
+        evt.report = strReportLocal;
+        evt.rxDF = RxDFLocal;
+        UDPStatusQueue.push(evt);
 
-        if (!UDPevent) UDPevent = true;     //flag for main UDP server code to update Arduino
-                                            //avoid UDPevent race in case Preempt already set it                    
+        lastFullEvent = evt;   // remember as the latest full snapshot, for PreemptiveTXCheck to build on
+
+        // Moved to AFTER evt is built/pushed so PreemptiveTXCheck (if it fires)
+        // starts from this packet's up-to-date data via lastFullEvent, not the
+        // previous packet's. haltTXevent here still reflects ONLY this packet's
+        // own halt decision (set above, untouched since) - so the guard still
+        // correctly prevents re-triggering a preemptive start in the same
+        // packet that just decided to halt one; only the TIMING of the call
+        // moved, not what haltTXevent means.
+        if (!haltTXevent) PreemptiveTXCheck();                // may push its own, separate UDPStatusEvent
 
         return ret;
     }
@@ -422,45 +466,45 @@ std::string ProcessPacket(char * message, int message_len)
         // emit UI erase message signal
     }
     else if (NewPacket.PacketType == 4) {
-		return "Reply";
+        return "Reply";
         WSJTX_Reply ReplyPacket(pkt, NewPacket.index);
         ReplyPacket.Decode();
         // Process ReplyPacket and emit UI update signal
     }
     else if (NewPacket.PacketType == 5) {
-		return "Logged";
+        return "Logged";
         WSJTX_Logged LoggedPacket(pkt, NewPacket.index);
         LoggedPacket.Decode();
         // emit UI update signal for logged packet
     }
-	else if (NewPacket.PacketType == 17) {
-		std::cout << "SetFreq Packet DUMP" << std::endl;
+    else if (NewPacket.PacketType == 17) {
+        std::cout << "SetFreq Packet DUMP" << std::endl;
         dump_packet_hex(pkt);
-        
+
         WSJTX_SetFreq SetFreqPacket(pkt, NewPacket.index);
-		std::cout << "SetFreq Packet Head: ClientID = " << NewPacket.ClientID << " Index after head = " << NewPacket.index << std::endl;
+        std::cout << "SetFreq Packet Head: ClientID = " << NewPacket.ClientID << " Index after head = " << NewPacket.index << std::endl;
         try {
             SetFreqPacket = WSJTX_SetFreq(pkt, NewPacket.index);
         }
         catch (const std::exception& e) {
             std::cerr << "Exception during WSJTX_SetFreq construction: " << e.what() << std::endl;
-			return "SetFreq Error";
-		}
+            return "SetFreq Error";
+        }
         try {
             SetFreqPacket.Decode();
         }
         catch (const std::exception& e) {
             std::cerr << "Exception during WSJTX_SetFreq Decode: " << e.what() << std::endl;
             return "SetFreq Error";
-                    }
+        }
         // Process SetFreqPacket and emit UI update signal
 
-		std::cout << "SetFreq Packet: ClientID = " << SetFreqPacket.ClientID << " Freq = " << SetFreqPacket.dialFrequency << " Mode = " << SetFreqPacket.Mode << " TxPeriod = " << SetFreqPacket.TxPeriod << std::endl;
-	    return "SetFreq";
+        std::cout << "SetFreq Packet: ClientID = " << SetFreqPacket.ClientID << " Freq = " << SetFreqPacket.dialFrequency << " Mode = " << SetFreqPacket.Mode << " TxPeriod = " << SetFreqPacket.TxPeriod << std::endl;
+        return "SetFreq";
     }
     std::cout << "Unknown Packet DUMP type " << to_string(NewPacket.PacketType) << std::endl;
     dump_packet_hex(pkt);
-	return "Unknown " + to_string(NewPacket.PacketType);
+    return "Unknown " + to_string(NewPacket.PacketType);
 }
 
 std::string removeTrailingSpaces(std::string str) {
@@ -586,7 +630,7 @@ std::string EncodeMessage(const std::string& WSJTX_TXmodeStr, const std::string&
 
     while (std::getline(iss, line, '\n')) {
         lineCount++;
-		std::cout << "Line " << lineCount << ": " << line << std::endl;
+        std::cout << "Line " << lineCount << ": " << line << std::endl;
         // Use a more robust check for decoded message and symbols line
         if (lineCount == 3) {
             if (line.length() >= 42) {
@@ -627,12 +671,12 @@ std::string strPacketType(int type)
     case 3: return "Erase";
     case 4: return "Reply";
     case 5: return "Logged";
-	case 6: return "Close";
-	case 7: return "HeartbeatEx";
-	case 8: return "StatusEx";
-	case 9: return "DecodeEx";
-	case 10: return "WSPRDecode";
-	case 17: return "SetFreq";
+    case 6: return "Close";
+    case 7: return "HeartbeatEx";
+    case 8: return "StatusEx";
+    case 9: return "DecodeEx";
+    case 10: return "WSPRDecode";
+    case 17: return "SetFreq";
     default: return "Unknown";
     }
 }
@@ -647,5 +691,3 @@ LPWSTR ConvertToLPWSTR(const char* charString) {
     MultiByteToWideChar(CP_ACP, 0, charString, -1, wcharString, len);
     return wcharString;
 }
-
-

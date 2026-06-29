@@ -46,6 +46,23 @@ public:
     }
 
     /**
+     * @brief Non-blocking pop. If the queue is empty, returns false immediately
+     *        and leaves `outMessage` untouched. Otherwise pops the front message
+     *        into `outMessage` and returns true.
+     *        Safe to call from a context (e.g. a GUI/timer thread) that must
+     *        never block waiting for a producer.
+     */
+    bool try_pop(T& outMessage) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (queue_.empty()) {
+            return false;
+        }
+        outMessage = std::move(queue_.front());
+        queue_.pop();
+        return true;
+    }
+
+    /**
      * @brief Checks if the queue is currently empty.
      */
     bool empty() const {

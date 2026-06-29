@@ -84,6 +84,35 @@ void RTTY_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _p
 			// This is a non-blocking check
 			while (!RTTYmsgOutQ.empty()) {
 				std::string outMsg = RTTYmsgOutQ.waitAndPop();
+
+				// If this is a frequency message, look ahead and collapse any
+				// immediately-following run of {F...} messages down to just the last one -
+				// intermediate frequencies in a fast-tuning burst are superseded before
+				// they'd even finish sending, so there's no point transmitting them.
+				if (outMsg.rfind("{F", 0) == 0) {
+					while (!RTTYmsgOutQ.empty()) {
+						std::string peeked = RTTYmsgOutQ.waitAndPop();
+						if (peeked.rfind("{F", 0) == 0) {
+							outMsg = peeked;   // newer freq supersedes the one we were holding
+							continue;          // keep looking for an even newer one
+						}
+						else {
+							// Next message isn't a frequency update - send the freq we're
+							// holding now, then fall through to send `peeked` via the
+							// normal path below by NOT discarding it.
+							if (!outMsg.empty()) {
+								std::cout << get_millis() << " RTTY Server Sending outgoing message to client: " << outMsg << std::endl;
+								if (!RTTYpipe.writeMessage(outMsg)) {
+									std::cerr << get_millis() << " RTTY Server Failed to send message to client." << std::endl;
+									break;
+								}
+							}
+							outMsg = peeked;   // now send this non-freq message via the normal path below
+							break;
+						}
+					}
+				}
+
 				if (!outMsg.empty()) {
 					std::cout << get_millis() << " RTTY Server Sending outgoing message to client: " << outMsg << std::endl;
 					if (!RTTYpipe.writeMessage(outMsg)) {
