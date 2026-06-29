@@ -596,7 +596,7 @@ void SDRunoPlugin_TXLinkForm::Setup()
 
 	LoadRTCdelay();
 	udp_poller.interval(std::chrono::milliseconds(10));
-	udp_poller.start();
+	//udp_poller.start();
 	udp_poller.elapse([&] {
 		udp_poller.stop();						// Stop it immediately so it only runs once
 		if (UDPevent) { ProcessUDPEvent(); }	// Run your sequencing logic
@@ -706,6 +706,8 @@ void SDRunoPlugin_TXLinkForm::OnTimer()
 		//std::cout << get_millis() << " SDRunoPlugin_TXLinkForm::m_timer.elapse - UnloadInProgress - waiting for ExitAllRequest" << std::endl;
 		return;										//skip the rest of the code in this elapse function if UnloadInProgress
 	}
+
+	if (UDPevent) { TRY_STEP("ProcessUDPEvent", ProcessUDPEvent()); }		//moved from its own timer because of thread re-entry with dual timers
 
 	TRY_STEP("CheckWindowState", CheckWindowState());					//check if main SDRuno window minimized or restored
 
@@ -881,7 +883,7 @@ void SDRunoPlugin_TXLinkForm::ProcessFrequencyChanged(double freq0, double freq1
 
 	if (SplitMode == SplitNone && bF1changed)
 	{
-		m_controller.SetVfoFrequency(1, freq0);
+		SetVfoFrequencySafe(m_controller, 1, freq0);
 	}
 	else if (SplitMode == SplitNone && bF0changed)
 	{
@@ -891,7 +893,7 @@ void SDRunoPlugin_TXLinkForm::ProcessFrequencyChanged(double freq0, double freq1
 	{
 		if (freq0 != CurrentTXfreq)
 		{
-			m_controller.SetVfoFrequency(0, CurrentTXfreq);
+			SetVfoFrequencySafe(m_controller, 0, CurrentTXfreq);
 		}
 	}
 	else
@@ -900,7 +902,7 @@ void SDRunoPlugin_TXLinkForm::ProcessFrequencyChanged(double freq0, double freq1
 		{
 			if (bOFSchkbox) {
 				freq1 = freq0 + OFStxFreq;
-				m_controller.SetVfoFrequency(1, freq1);
+				SetVfoFrequencySafe(m_controller, 1, freq1);
 			}
 			if (freq1 != CurrentTXfreq)
 			{
@@ -1182,14 +1184,14 @@ void SDRunoPlugin_TXLinkForm::ProcessUDPEvent()
 			//std::string command = "start /b chrome \"" + strURL + "\"";
 			//system(command.c_str());
 
-			ShellExecute(
-				NULL,                    // No parent window
-				ConvertToLPWSTR("open"),                  // Operation to perform
-				ConvertToLPWSTR("chrome.exe"),            // Application to open (assuming chrome.exe is in PATH)
-				ConvertToLPWSTR(strURL.c_str()),             // Parameters (the URL)
-				NULL,                    // Default directory
-				SW_SHOWNORMAL            // Show command (can be SW_HIDE, SW_MINIMIZE, etc.)
-			);
+			std::thread([strURL]()					//do this in a separate thread so it doesn't block the main thread
+				{
+					LPWSTRGuard op("open");
+					LPWSTRGuard app("chrome.exe");
+					LPWSTRGuard url(strURL.c_str());
+
+					ShellExecute(NULL, op, app, url, NULL, SW_SHOWNORMAL);
+				}).detach();
 		}
 		newDXcall = "";
 		UDPevent = false;
@@ -1221,7 +1223,10 @@ void SDRunoPlugin_TXLinkForm::SetupDataMode()
 	FT8Lbl.fgcolor(nana::colors::black);
 	FT8Lbl.bgcolor(nana::colors::light_salmon);
 	FT8Lbl.transparent(false);
-	SplitMode = SplitFT8;
+	{
+		std::lock_guard<std::mutex> lock(g_splitModeMutex);
+		SplitMode = SplitFT8;
+	}
 	// and set FT8 RX in vrx0 & vrx1
 	if (CurrentTXfreq != CurrentWSJTXfreq)				//make sure freq is set
 	{
@@ -1233,8 +1238,8 @@ void SDRunoPlugin_TXLinkForm::SetupDataMode()
 
 	double f0 = GetVfoFrequencySafe(m_controller, 0);
 	double f1 = GetVfoFrequencySafe(m_controller, 1);
-	if (CurrentTXfreq != f0) m_controller.SetVfoFrequency(0, CurrentTXfreq);
-	if (CurrentRXfreq != f1) m_controller.SetVfoFrequency(1, CurrentRXfreq);
+	if (CurrentTXfreq != f0) SetVfoFrequencySafe(m_controller, 0, CurrentTXfreq);
+	if (CurrentRXfreq != f1) SetVfoFrequencySafe(m_controller, 1, CurrentRXfreq);
 
 	m_parent._updateTX_AnnoEntry("FT8Base", "", (int64_t)CurrentTXfreq);
 	m_parent._updateRX_AnnoEntry("FTX", "", (int64_t)CurrentRXfreq);
@@ -1278,19 +1283,19 @@ void SDRunoPlugin_TXLinkForm::ProcessTunerFreqChange(int32_t freqIncr)
 	if (SplitMode == SplitNone)
 	{
 		long Freq = GetVfoFrequencySafe(m_controller, 0);
-		m_controller.SetVfoFrequency(0, Freq + freqIncr);
+		SetVfoFrequencySafe(m_controller, 0, Freq + freqIncr);
 	}
 	else if (SplitMode == SplitTxRx)
 	{
 		if (bRITchkbox)
 		{
 			long Freq = GetVfoFrequencySafe(m_controller, 0);
-			m_controller.SetVfoFrequency(0, Freq + freqIncr);
+			SetVfoFrequencySafe(m_controller, 0, Freq + freqIncr);
 		}
 		else
 		{
 			long Freq = GetVfoFrequencySafe(m_controller, 1);
-			m_controller.SetVfoFrequency(1, Freq + freqIncr);
+			SetVfoFrequencySafe(m_controller, 1, Freq + freqIncr);
 		}
 	}
 }
@@ -1398,7 +1403,7 @@ void SDRunoPlugin_TXLinkForm::SendTXfreq()
 	double vtxFreq = GetVfoFrequencySafe(m_controller, 1);
 	if (vtxFreq != CurrentTXfreq && vtxFreq > 0 && SplitMode != SplitFT8)
 	{
-		m_controller.SetVfoFrequency(1, CurrentTXfreq);					// force vrx1 to track TX freq
+		SetVfoFrequencySafe(m_controller, 1, CurrentTXfreq);					// force vrx1 to track TX freq
 	}
 }
 
@@ -1637,7 +1642,10 @@ void SDRunoPlugin_TXLinkForm::FixFreqBtnClicked()
 	{
 		FixFreqBtn.caption("Split");
 		TrackFreq = true;
-		SplitMode = SplitNone;
+		{
+			std::lock_guard<std::mutex> lock(g_splitModeMutex);
+			SplitMode = SplitNone;
+		}
 		freqTb.bgcolor(nana::colors::white);
 		
 		FT8Lbl.fgcolor(nana::colors::white);
@@ -1650,7 +1658,10 @@ void SDRunoPlugin_TXLinkForm::FixFreqBtnClicked()
 	{
 		FixFreqBtn.caption("UnSplit");
 		TrackFreq = false;
-		SplitMode = SplitTxRx;
+		{
+			std::lock_guard<std::mutex> lock(g_splitModeMutex);
+			SplitMode = SplitTxRx;
+		}
 		freqTb.bgcolor(nana::colors::red);
 		freqTb.fgcolor(nana::colors::white);
 		FT8Lbl.fgcolor(nana::colors::white);
@@ -1799,7 +1810,10 @@ void SDRunoPlugin_TXLinkForm::FixTXup()
 	{	//take it out of tracking
 		FixFreqBtn.caption("UnSplit");
 		TrackFreq = false;
-		SplitMode = SplitTxRx;
+		{
+			std::lock_guard<std::mutex> lock(g_splitModeMutex);
+			SplitMode = SplitTxRx;
+		}
 		freqTb.bgcolor(nana::colors::red);
 		freqTb.fgcolor(nana::colors::white);
 		FT8Lbl.fgcolor(nana::colors::white);
@@ -2035,8 +2049,8 @@ string SDRunoPlugin_TXLinkForm::GetValidTempLimit()
 
 void SDRunoPlugin_TXLinkForm::SetRXFreq()
 {
-	m_controller.SetVfoFrequency(0, CurrentTXfreq);
-	m_controller.SetVfoFrequency(1, CurrentTXfreq);
+	SetVfoFrequencySafe(m_controller, 0, CurrentTXfreq);
+	SetVfoFrequencySafe(m_controller, 1, CurrentTXfreq);
 }
 
 void SDRunoPlugin_TXLinkForm::SwapTxRxFreq()
@@ -2046,8 +2060,8 @@ void SDRunoPlugin_TXLinkForm::SwapTxRxFreq()
 		//swap TX and RX freqs
 		double VFO0 = GetVfoFrequencySafe(m_controller, 0);
 		double VFO1 = GetVfoFrequencySafe(m_controller, 1);
-		m_controller.SetVfoFrequency(0, VFO1);
-		m_controller.SetVfoFrequency(1, VFO0);
+		SetVfoFrequencySafe(m_controller, 0, VFO1);
+		SetVfoFrequencySafe(m_controller, 1, VFO0);
 	}
 }
 
@@ -2265,14 +2279,17 @@ void SDRunoPlugin_TXLinkForm::LoadSplitMode()
 	}
 	if (tmp == "0")
 	{
+		std::lock_guard<std::mutex> lock(g_splitModeMutex);
 		SplitMode = SplitNone;				//no split
 	}
 	else if (tmp == "1")
 	{
+		std::lock_guard<std::mutex> lock(g_splitModeMutex);
 		SplitMode = SplitTxRx;				//TX/RX split
 	}
 	else if (tmp == "2")
 	{
+		std::lock_guard<std::mutex> lock(g_splitModeMutex);
 		SplitMode = SplitFT8;				//FT8 split
 	}
 }

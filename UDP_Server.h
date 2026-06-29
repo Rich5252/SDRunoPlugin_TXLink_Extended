@@ -12,7 +12,16 @@
 
 std::string ProcessPacket(char * message, int message_len);
 void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _parent);
+
+// Small RAII helper to ensure mem is released when the function exits, even if an exception is thrown.
+struct LPWSTRGuard {
+    LPWSTR ptr;
+    explicit LPWSTRGuard(const char* s) : ptr(ConvertToLPWSTR(s)) {}
+    ~LPWSTRGuard() { delete[] ptr; }
+    operator LPWSTR() const { return ptr; }
+};
 LPWSTR ConvertToLPWSTR(const char* charString);
+
 std::string EncodeMessage(const std::string& WSJTX_TXmodeStr, const std::string& strMessage);
 std::string removeTrailingSpaces(std::string str);
 void PreemptiveTXCheck();

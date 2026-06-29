@@ -17,6 +17,7 @@
 
 std::atomic<bool> TunerExitRequest(false);
 std::mutex m_lock3;
+std::mutex g_splitModeMutex;
 
 //started in a seperate thread from SDRunoPlugin_TXLink.cpp
 void Tuner_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _parent)
@@ -61,28 +62,35 @@ void Tuner_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _
 			{
 				if (TunerExitRequest) { break; }
 				m_lock3.lock();
-				SDRunoPlugin_TXLinkForm::eSplitMode tmp = _parent.m_Ui->m_form->SplitMode;			//can now get split mode from _parent.m_Ui.SplitMode directly
+
+				SDRunoPlugin_TXLinkForm::eSplitMode tmp;
+				bool ritChk;
+				{
+					std::lock_guard<std::mutex> lock(g_splitModeMutex);
+					tmp = _parent.m_Ui->m_form->SplitMode;
+					ritChk = _parent.m_Ui->m_form->bRITchkbox;
+				}
 				if (tmp == SDRunoPlugin_TXLinkForm::SplitNone)
 				{
 					//no split so change RX frequency
 					long Freq = GetVfoFrequencySafe(_controller, 0);
-					_controller.SetVfoFrequency(0, Freq + FreqIncr);
+					SetVfoFrequencySafe(_controller, 0, Freq + FreqIncr);
 					EncoderSteps = 0;	//reset encoder steps
 					FreqIncr = 0;	//reset frequency increment
 				}
 				if (tmp == SDRunoPlugin_TXLinkForm::SplitTxRx)
 				{
-					if (_parent.m_Ui->m_form->bRITchkbox)
+					if (ritChk)
 					{
 						//RIT so change RX frequency
 						long Freq = GetVfoFrequencySafe(_controller, 0);
-						_controller.SetVfoFrequency(0, Freq + FreqIncr);
+						SetVfoFrequencySafe(_controller, 0, Freq + FreqIncr);
 					}
 					else
 					{
 						//no RIT so change TX frequency
 						long Freq = GetVfoFrequencySafe(_controller, 1);
-						_controller.SetVfoFrequency(1, Freq + FreqIncr);
+						SetVfoFrequencySafe(_controller, 1, Freq + FreqIncr);
 					}
 					EncoderSteps = 0;	//reset encoder steps
 					FreqIncr = 0;	//reset frequency increment
