@@ -570,7 +570,8 @@ void SDRunoPlugin_TXLinkForm::Setup()
 	TXlevelTb.caption(strTXlevel);		//this triggers event and opens/resets port on startup
 	PAlevelTb.caption(strPAlevel);		//this triggers event and opens/resets port on startup
 
-	m_timer.interval(std::chrono::milliseconds(50));
+	m_timer.interval(std::chrono::milliseconds(5));			//this is just the time between finishing one timer event and starting the next, 
+																//  not the actual timer interval
 	// this next call sets the code to be executed after every interval
 	m_timer.elapse([&]
 		{

@@ -312,7 +312,7 @@ std::string ProcessPacket(char * message, int message_len)
         // emit UI update signal for heartbeat if needed
     }
     else if (NewPacket.PacketType == 1) {
-        std::lock_guard<std::mutex> lock(UDPEvent_mtx);
+        //std::lock_guard<std::mutex> lock(UDPEvent_mtx);
 
 		std::string ret = "Status";
 
@@ -329,7 +329,7 @@ std::string ProcessPacket(char * message, int message_len)
 
 		if (msg == "") { msg = "CQ G4AHN IO91"; }                           //default message if empty
 
-    /*  Following no longer required with mutex protection
+    //  Following no longer required with mutex protection
         if (UDPevent) { std::cout << "UDP_Server: ******* WARNING ************  UDP event already set\r\n"; }
 		int sleeps = 0;
         while (UDPevent && sleeps < 50)
@@ -339,7 +339,8 @@ std::string ProcessPacket(char * message, int message_len)
 			if (UDPExitRequest) { return "UDP_Server: UDPExitRequest"; } // exit if requested
         } 
         if (sleeps > 0) { std::cout << get_millis() << " UDP event wait: " << sleeps << " times" << std::endl; }
-    */  
+        std::lock_guard<std::mutex> lock(UDPEvent_mtx);
+    //*/  
         dataChanged = false;   //reset data changed flag - set to true if any data changes below
         if (StatusPacket.Frequency != curFrequency && newFrequency == 0)
         {
