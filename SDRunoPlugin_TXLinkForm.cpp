@@ -17,25 +17,18 @@
 #include "Heartbeat.h"
 #include "SDRUnoHelper.h"
 
-#include <io.h>
-#include <shlobj.h>
 #include <nana/gui.hpp>
 #include <nana/gui/widgets/button.hpp>
 #include <nana/gui/widgets/listbox.hpp>
-#include <nana/gui/widgets/slider.hpp>
 #include <nana/gui/widgets/label.hpp>
-#include <nana/gui/widgets/combox.hpp>
 #include <nana/gui/widgets/textbox.hpp>
 #include <nana/gui/timer.hpp>
 #include <nana/gui/widgets/picture.hpp>
-#include <nana/gui/filebox.hpp>
 #include <nana/gui/dragger.hpp>
-#include <nana/gui/detail/native_window_interface.hpp>
 #include <nana/gui/programming_interface.hpp> // Often where 'main_thread_dispatch' lives
-#include <nana/system/platform.hpp>
 
 
-#define VERSION "V2.0"
+#define VERSION "V3.0"
 
 // Serial commands from PC TXlink sent to Arduino
 // {Bn}     Ext PA fan hold time minutes
