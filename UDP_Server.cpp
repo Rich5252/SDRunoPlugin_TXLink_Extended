@@ -401,6 +401,10 @@ std::string ProcessPacket(char* message, int message_len)
         TXenabled = StatusPacket.TxEnabled;
         if (TXenabled)
         {
+			//Do we need to abort a preemptive TX because it started in the wrong slot.
+			//We are looking for a packet early in TXslot that would normally be a TX packet but says "not transmitting" - this is a preemptive TX abort
+            // Latest WSJTX has an FT2 end tx packet very close to end of slot which comes after a valid PreemptTX so ignore this.
+
             int DTC = ms % slotPeriod;
             if (TXpreempted &&  nSlot != TXpreemptedStartSlot && (ms - PreemptiveTXstartMs) < 1000 && !StatusPacket.Transmitting && TXeven == IsSlotEven)
                 // We are in the slot following preemptive TX but wsjtx says not TX so must mean slot was wrong
@@ -412,6 +416,9 @@ std::string ProcessPacket(char* message, int message_len)
                 std::cout << str1;
             }
 
+            //Assess which is correct TX slot. We can be sure if packet says TXenabled and Transmitting.
+			// More difficult if TXenabled and not Transmitting because normally a packet is received towards end of TX slot to stop TX.
+            
             bool even = (ms / slotPeriod) % 2 == 0;
             int SlotTimeLeft = slotPeriod - DTC;
             if (StatusPacket.Transmitting)   TXeven = even;              //can only be certain when wsjtx is tx'ing
@@ -469,6 +476,22 @@ std::string ProcessPacket(char* message, int message_len)
         // packet that just decided to halt one; only the TIMING of the call
         // moved, not what haltTXevent means.
         if (!haltTXevent) PreemptiveTXCheck();                // may push its own, separate UDPStatusEvent
+
+
+		//QRZ lookup  (moved from Form thread to reduce load on its thread)
+        if (newDXcall != "")        //&& !bLastTenCalls(evt.newDXcall))
+        {
+            std::string strURL = "https://www.qrz.com/db/" + evt.newDXcall;
+
+            std::thread([strURL]()					//do this in a separate thread so it doesn't block the main thread
+                {
+                    LPWSTRGuard op("open");
+                    LPWSTRGuard app("chrome.exe");
+                    LPWSTRGuard url(strURL.c_str());
+
+                    ShellExecute(NULL, op, app, url, NULL, SW_SHOWNORMAL);
+                }).detach();
+        }
 
         return ret;
     }

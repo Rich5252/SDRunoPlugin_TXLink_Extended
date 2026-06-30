@@ -1186,19 +1186,6 @@ void SDRunoPlugin_TXLinkForm::ProcessUDPEvent()
 		ShowIsSent(is_sent);
 		FT8msgLbl.caption(evt.decodeMsg + " - " + to_string(TXtimeToEnd));
 
-		if (evt.newDXcall != "" && !bLastTenCalls(evt.newDXcall))
-		{
-			std::string strURL = "https://www.qrz.com/db/" + evt.newDXcall;
-
-			std::thread([strURL]()					//do this in a separate thread so it doesn't block the main thread
-				{
-					LPWSTRGuard op("open");
-					LPWSTRGuard app("chrome.exe");
-					LPWSTRGuard url(strURL.c_str());
-
-					ShellExecute(NULL, op, app, url, NULL, SW_SHOWNORMAL);
-				}).detach();
-		}
 	}	// end while - next queued event, if any
 }
 
