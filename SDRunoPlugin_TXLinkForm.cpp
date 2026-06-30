@@ -1084,124 +1084,122 @@ void SDRunoPlugin_TXLinkForm::ProcessUDPEvent()
 {													//called from Form timer event to process wsjtx UDP	
 	//WSJT_X FT8 UDP request?
 
-	// Drain ALL pending events but only act on the LATEST one's full contents.
-	// Preserves the old "don't act on a stale intermediate frequency/state if
-	// several packets queued up before we got here" behaviour, without needing
-	// a cross-thread flag - intermediate events are simply superseded.
-	UDPStatusEvent latest;
-	bool hasEvent = false;
-	UDPStatusEvent tmp;
-	while (UDPStatusQueue.try_pop(tmp))
+	// Process EVERY queued event, in order - NOT coalesced to just the latest.
+	// Some fields here are one-shot/edge-triggered (newDXcall, haltTXevent,
+	// txModeChanged) rather than persistent state, so collapsing a burst down
+	// to "just the last one" can silently drop a real occurrence (e.g. a new
+	// DX call) if a later, unrelated event arrives in the same drain cycle.
+	// WSJT-X's UDP packet rate is naturally low, so processing every event
+	// individually here is fine - unlike the frequency/tuner queues, which
+	// deliberately DO coalesce because those really are "only the latest
+	// value matters" updates.
+	UDPStatusEvent evt;
+	while (UDPStatusQueue.try_pop(evt))
 	{
-		latest = tmp;
-		hasEvent = true;
-	}
+		m_lastUDPStatus = evt;		// Form-owned copy, safe for button handlers/millisToEnd to read anytime afterward
+		if (evt.txModeChanged) { m_txModeChangePending = true; }
 
-	if (!hasEvent) { return; }
-
-	m_lastUDPStatus = latest;		// Form-owned copy, safe for button handlers/millisToEnd to read anytime afterward
-	if (latest.txModeChanged) { m_txModeChangePending = true; }
-
-	//following logic to handle correct mode restore on startup
-	static bool FirstTime = true;				//first time in this function so maybe ignore wsjtx for now?
-	if (FirstTime && SplitMode != SplitFT8)     //only reset datamode when SplitModeFT8 has been restored on startup
-	{
-		if (latest.newFrequency > 0) { FirstTime = false; }			//wait until wsjtx first changes freq to set data mode if datamode was not restored on startup
-		return;
-	}
-
-	FirstTime = false;		//setup data mode on first UDP event only when SplitFT8 restored in data mode
-
-	bool is_sent = false;
-	long TXtimeToEnd = 0;
-	if (Serial.Connected())
-	{
-		//always update freq when changed in wsjtx
-		if (latest.newFrequency > 0)			//user changed band / mode in wsjtx
+		//following logic to handle correct mode restore on startup
+		static bool FirstTime = true;				//first time in this function so maybe ignore wsjtx for now?
+		if (FirstTime && SplitMode != SplitFT8)     //only reset datamode when SplitModeFT8 has been restored on startup
 		{
-			CurrentWSJTXfreq = static_cast<double>(latest.newFrequency);					//local form master setting
-			SetupDataMode();
+			if (evt.newFrequency > 0) { FirstTime = false; }			//wait until wsjtx first changes freq to set data mode if datamode was not restored on startup
+			continue;		// skip this event, but keep processing any further queued events
 		}
 
-		std::string str = "{X0}";
-		std::string strW = "";			//for W message to set time to end of TX
-		if (latest.dataChanged)
+		FirstTime = false;		//setup data mode on first UDP event only when SplitFT8 restored in data mode
+
+		bool is_sent = false;
+		long TXtimeToEnd = 0;
+		if (Serial.Connected())
 		{
-			//refresh TX data - this will usually be after wsjtx decodes but before next TX start period
-			str = "{M8}";
-			if (latest.txModeStr == "FT4") { str = "{M4}"; }
-			if (latest.txModeStr == "FT2") { str = "{M2}"; }
-
-			str = str + "{Y" + to_string(latest.txDF) + "}";
-
-			str = str + "{Z" + latest.txSymbols + "}";
-			is_sent = Serial.WriteSerialPort(str);
-		}
-
-		str = "{X0}";
-		strW = "";
-		if (latest.txFlag) {
-			//this UDP datagram is sent immediately at start of tx period
-			if (latest.decodeMsg != "TUNE")
+			//always update freq when changed in wsjtx
+			if (evt.newFrequency > 0)			//user changed band / mode in wsjtx
 			{
-				TXtimeToEnd = millisToEnd();
+				CurrentWSJTXfreq = static_cast<double>(evt.newFrequency);					//local form master setting
+				SetupDataMode();
 			}
-			else
+
+			std::string str = "{X0}";
+			std::string strW = "";			//for W message to set time to end of TX
+			if (evt.dataChanged)
 			{
-				TXtimeToEnd = 30000;		//TUNE for 30 seconds from now
+				//refresh TX data - this will usually be after wsjtx decodes but before next TX start period
+				str = "{M8}";
+				if (evt.txModeStr == "FT4") { str = "{M4}"; }
+				if (evt.txModeStr == "FT2") { str = "{M2}"; }
+
+				str = str + "{Y" + to_string(evt.txDF) + "}";
+
+				str = str + "{Z" + evt.txSymbols + "}";
+				is_sent = Serial.WriteSerialPort(str);
 			}
-			strW = "{W" + to_string(TXtimeToEnd) + "}";
 
-			// TX key on message
-			str = "{X1}";							//if (TXtimeToEnd >= 12000) { str = "{X1}"; }		//only enable if enough time left
-		}
-		//indicate FT8 tx on UI form
-		if (str == "{X0}")
-		{
-			FT8txOnLbl.bgcolor(nana::colors::light_grey);
-		}
-		else           //FT8 TX
-		{
-			DigiTXmodeStr = latest.txModeStr;		//save current TX mode
-			FT8Lbl.format(true);
-			FT8Lbl.caption("<bold=true size=10>" + DigiTXmodeStr + "</>");
-			FT8txOnLbl.bgcolor(nana::colors::red);
+			str = "{X0}";
+			strW = "";
+			if (evt.txFlag) {
+				//this UDP datagram is sent immediately at start of tx period
+				if (evt.decodeMsg != "TUNE")
+				{
+					TXtimeToEnd = millisToEnd();
+				}
+				else
+				{
+					TXtimeToEnd = 30000;		//TUNE for 30 seconds from now
+				}
+				strW = "{W" + to_string(TXtimeToEnd) + "}";
 
-			SetupDataMode();
-		}
-
-		if (latest.haltTXevent) {
-			TXtimeToEnd = 0;
-			strW = "{X0}";
-			str = "{W0}";					//force TX to stop (needs this command order)
-		}
-
-		//send TX last so freq & message updated first in Arduino
-		is_sent = true;
-		if (SplitMode == SplitFT8 && (DigiTXmodeStr == "FT2" || DigiTXmodeStr == "FT4" || DigiTXmodeStr == "FT8"))
-		{
-			str = strW + str;
-			is_sent = Serial.WriteSerialPort(str); //Arduino setup commands will now send in earlier status UDP
-			// then Wn & X1 will be sent here
-		}
-
-	}
-	ShowIsSent(is_sent);
-	FT8msgLbl.caption(latest.decodeMsg + " - " + to_string(TXtimeToEnd));
-
-	if (latest.newDXcall != "" && !bLastTenCalls(latest.newDXcall))
-	{
-		std::string strURL = "https://www.qrz.com/db/" + latest.newDXcall;
-
-		std::thread([strURL]()					//do this in a separate thread so it doesn't block the main thread
+				// TX key on message
+				str = "{X1}";							//if (TXtimeToEnd >= 12000) { str = "{X1}"; }		//only enable if enough time left
+			}
+			//indicate FT8 tx on UI form
+			if (str == "{X0}")
 			{
-				LPWSTRGuard op("open");
-				LPWSTRGuard app("chrome.exe");
-				LPWSTRGuard url(strURL.c_str());
+				FT8txOnLbl.bgcolor(nana::colors::light_grey);
+			}
+			else           //FT8 TX
+			{
+				DigiTXmodeStr = evt.txModeStr;		//save current TX mode
+				FT8Lbl.format(true);
+				FT8Lbl.caption("<bold=true size=10>" + DigiTXmodeStr + "</>");
+				FT8txOnLbl.bgcolor(nana::colors::red);
 
-				ShellExecute(NULL, op, app, url, NULL, SW_SHOWNORMAL);
-			}).detach();
-	}
+				SetupDataMode();
+			}
+
+			if (evt.haltTXevent) {
+				TXtimeToEnd = 0;
+				strW = "{X0}";
+				str = "{W0}";					//force TX to stop (needs this command order)
+			}
+
+			//send TX last so freq & message updated first in Arduino
+			is_sent = true;
+			if (SplitMode == SplitFT8 && (DigiTXmodeStr == "FT2" || DigiTXmodeStr == "FT4" || DigiTXmodeStr == "FT8"))
+			{
+				str = strW + str;
+				is_sent = Serial.WriteSerialPort(str); //Arduino setup commands will now send in earlier status UDP
+				// then Wn & X1 will be sent here
+			}
+
+		}
+		ShowIsSent(is_sent);
+		FT8msgLbl.caption(evt.decodeMsg + " - " + to_string(TXtimeToEnd));
+
+		if (evt.newDXcall != "" && !bLastTenCalls(evt.newDXcall))
+		{
+			std::string strURL = "https://www.qrz.com/db/" + evt.newDXcall;
+
+			std::thread([strURL]()					//do this in a separate thread so it doesn't block the main thread
+				{
+					LPWSTRGuard op("open");
+					LPWSTRGuard app("chrome.exe");
+					LPWSTRGuard url(strURL.c_str());
+
+					ShellExecute(NULL, op, app, url, NULL, SW_SHOWNORMAL);
+				}).detach();
+		}
+	}	// end while - next queued event, if any
 }
 
 void SDRunoPlugin_TXLinkForm::ReTransmit() {

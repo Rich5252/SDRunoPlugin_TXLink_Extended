@@ -60,6 +60,7 @@ static bool msgChanged = false;                    //local decision state for TX
 static bool TXeven = true;
 static bool TXenabled = false;
 static bool TXpreempted = false;                    //Preemptive TX has started
+static int TXpreemptedStartSlot = 0;                //Slot in which Preemptive TX started (0-11)
 static uint64_t PreemptiveTXstartMs = 0;            //start time
 
 // Remembers the most recently pushed FULL UDPStatusEvent (from ProcessPacket).
@@ -304,6 +305,7 @@ void PreemptiveTXCheck()
         string str2 = "\r\n" + get_millis() + "Preemptive TX: " + FormatUtcTime(PreemptiveTXstartMs) + " Slot: " + to_string(SlotNumber) + " DTC: " + to_string(PreemptiveTXstartMs % slotPeriod) + str1 + "RTCdelay: " + to_string(RTCdelay) + "\r\n";
         std::cout << str2;
         TXpreempted = true;      //indicates when Preempted TX has started. Reset when next packet received (checking correct slot)
+        TXpreemptedStartSlot = SlotNumber;
 
         // Build the event as a copy of the most recent FULL snapshot, only
         // overriding the fields this preemptive-start actually changes.
@@ -342,7 +344,7 @@ std::string ProcessPacket(char* message, int message_len)
         std::string msg = StatusPacket.DefaultTXMessage;
         msg = removeTrailingSpaces(msg);
 
-        std::cout << "\n" << get_millis() << "DefaultTXMessage = " << '"' << StatusPacket.DefaultTXMessage << '"' << std::endl;
+        std::cout << "\n" << get_millis() << "NewStatuspacket: DefaultTXMessage = " << '"' << StatusPacket.DefaultTXMessage << '"' << std::endl;
 
         if (msg == "") { msg = "CQ G4AHN IO91"; }                           //default message if empty
 
@@ -384,7 +386,7 @@ std::string ProcessPacket(char* message, int message_len)
         TXsymbolsLocal = txSymbols;
         TXflgLocal = txFlag;
 
-        std::string newDXcall;
+        std::string newDXcall = "";
         if (StatusPacket.DXCall != DXcallLocal) { newDXcall = StatusPacket.DXCall; }
         DXcallLocal = StatusPacket.DXCall;
         DXgridLocal = StatusPacket.DXgrid;
@@ -392,32 +394,34 @@ std::string ProcessPacket(char* message, int message_len)
         RxDFLocal = StatusPacket.RxDF;       //receive freq offset
 
         //special handling for the Preemptive TX, remember tx period
+        uint64_t ms = GetCurrentTimeMs();
         int slotPeriod = WSJTX_TXmodeStr == "FT2" ? 3750 : (WSJTX_TXmodeStr == "FT4" ? 7500 : 15000);
+        int nSlot = (ms % 60000) / slotPeriod;
+		bool IsSlotEven = ((ms / slotPeriod) % 2) == 0;
         TXenabled = StatusPacket.TxEnabled;
         if (TXenabled)
         {
-            uint64_t ms = GetCurrentTimeMs();
             int DTC = ms % slotPeriod;
-            if (TXpreempted && (ms - PreemptiveTXstartMs) < 1000 && !StatusPacket.Transmitting)
+            if (TXpreempted &&  nSlot != TXpreemptedStartSlot && (ms - PreemptiveTXstartMs) < 1000 && !StatusPacket.Transmitting && TXeven == IsSlotEven)
                 // We are in the slot following preemptive TX but wsjtx says not TX so must mean slot was wrong
                  // so do a halt TX
             {
                 haltTXevent = true;
                 TXpreempted = false;
-                string str1 = get_millis() + "Preemptive TX Halt. DTC: " + to_string(DTC) + "\r\n";
+                string str1 = get_millis() + "Preemptive TX Halt. DTC: " + to_string(DTC) + "  trPeriod = " + to_string(StatusPacket.trPeriod) + "\r\n";
                 std::cout << str1;
             }
 
             bool even = (ms / slotPeriod) % 2 == 0;
             int SlotTimeLeft = slotPeriod - DTC;
             if (StatusPacket.Transmitting)   TXeven = even;              //can only be certain when wsjtx is tx'ing
-            if (!msgChanged && !StatusPacket.Transmitting && TXenabled && SlotTimeLeft > 3000) TXeven = !even;
+            if (nSlot != TXpreemptedStartSlot && !msgChanged && !StatusPacket.Transmitting && TXenabled && SlotTimeLeft > 3000) TXeven = !even;
             string str1 = dataChanged ? " Data changed. " : " Data unchanged. ";
             string str2 = msgChanged ? " Message changed. " : " Message unchanged. ";
             string str3 = TXeven ? " TXslot Even " : " TXslot Odd ";
             string str4 = StatusPacket.Transmitting ? " Transmitting. " : " Not transmitting. ";
             string str5 = TXenabled ? " TXenabled. " : " TXdisabled. ";
-            std::cout << get_millis() << str1 << str2 << str5 << str3 << str4 << " Slot: " << (ms % 60000) / slotPeriod << " SlotTimeLeft: " << SlotTimeLeft << std::endl;
+            std::cout << get_millis() << str1 << str2 << str5 << str3 << str4 << " Slot: " << nSlot << " SlotTimeLeft: " << SlotTimeLeft << std::endl;
         }
         if (StatusPacket.Transmitting)  TXpreempted = false;            //reset preemptive flag when actual TX starts
 
@@ -432,15 +436,30 @@ std::string ProcessPacket(char* message, int message_len)
         evt.haltTXevent = haltTXevent;
         evt.txModeChanged = TXmodeChange;
         TXmodeChange = false;      // one-shot: consumed into this event, reset for next packet
-        evt.newDXcall = newDXcall;
+        evt.newDXcall =  newDXcall;
         evt.decodeMsg = strDecodeMsg;
         evt.dxCall = DXcallLocal;
         evt.dxGrid = DXgridLocal;
         evt.report = strReportLocal;
         evt.rxDF = RxDFLocal;
+
+        lastFullEvent = evt;    // remember as the latest full snapshot, for PreemptiveTXCheck to build on
         UDPStatusQueue.push(evt);
 
-        lastFullEvent = evt;   // remember as the latest full snapshot, for PreemptiveTXCheck to build on
+        // One-shot/edge-triggered fields must NOT persist in the carry-forward copy -
+        // each represents "this happened on that specific packet", not ongoing state.
+        // If left set, the next PreemptiveTXCheck() call (which copies lastFullEvent)
+        // would re-signal something that already happened, possibly packets later -
+        // including redundant serial writes to the TX hardware (dataChanged) or
+        // re-triggering a frequency/data-mode update that's already been applied
+        // (newFrequency - this used to be reset by the Form after consuming it, back
+        // when it was a shared global; now the Form's copy (evt) is immutable once
+        // pushed, so the reset has to happen here, on the carry-forward copy instead).
+        lastFullEvent.newDXcall = "";
+        lastFullEvent.haltTXevent = false;
+        lastFullEvent.txModeChanged = false;
+        lastFullEvent.dataChanged = false;
+        lastFullEvent.newFrequency = 0;
 
         // Moved to AFTER evt is built/pushed so PreemptiveTXCheck (if it fires)
         // starts from this packet's up-to-date data via lastFullEvent, not the
