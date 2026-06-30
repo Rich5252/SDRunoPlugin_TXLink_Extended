@@ -3,26 +3,19 @@
 #include <nana/gui.hpp>
 #include <nana/gui/widgets/button.hpp>
 #include <nana/gui/widgets/checkbox.hpp>
-#include <nana/gui/widgets/listbox.hpp>
-#include <nana/gui/widgets/slider.hpp>
 #include <nana/gui/widgets/label.hpp>
-#include <nana/gui/widgets/combox.hpp>
 #include <nana/gui/widgets/textbox.hpp>
 #include <nana/gui/timer.hpp>
 #include <nana/gui/widgets/picture.hpp>
-#include <nana/gui/filebox.hpp>
 #include <nana/gui/dragger.hpp>
 
-#include <iostream>
-#include <iomanip>
-#include <sstream>
 #include <queue>
 #include <mutex>
-#include <condition_variable>
 
 #include <iunoplugincontroller.h>
 
 #include "SDRunoPlugin_TXLinkATUDialog.h"
+//NOTE ***** DO NOT DELETE THE FOLLOWING INCLUDES
 #include "SimpleSerial.h"
 #include "TunerServer.h"
 #include "DXspiderClient.h"
@@ -31,8 +24,8 @@
 #include "MessageQueue.h"
 #include "RealTimeClock_Utils.h"
 #include "UDPStatusEvent.h"   // struct UDPStatusEvent only - deliberately NOT UDP_Server.h,
-// which would create a circular include via SDRunoPlugin_TXLink.h
-#include <queue>
+								// which would create a circular include via SDRunoPlugin_TXLink.h
+
 
 struct TunerFreqRequest { int32_t freqIncr; };
 
@@ -89,19 +82,9 @@ public:
 
 	bool SendSerialMsg(const std::string& msg);			//thread safe way of sending messages from other processes or threads
 
-
 	void QueueFrequencyChanged(double freq0, double freq1);   // callable from any thread
 
-	nana::timer udp_poller;
-
-	std::queue<TunerFreqRequest> m_tunerQueue;
-	std::mutex m_tunerQueueMutex;
-
-	void QueueTunerFreqChange(int32_t freqIncr);   // callable from Tuner thread
-	void DrainTunerQueue();                         // Form-thread only
 	void ProcessTunerFreqChange(int32_t freqIncr);  // Form-thread only
-
-	nana::timer m_tunerPoller;   // new, dedicated fast timer
 
 private:
 	const std::string com_port = "\\\\.\\COM5";
@@ -217,6 +200,8 @@ private:
 	void Setup();
 	bool UnloadInProgress = false;
 	bool BackFromExitRequest = false;
+
+	HWND UNOhwnd = NULL;
 
 	// The following is to set up the panel graphic to look like a standard SDRuno panel
 	nana::picture bg_border{ *this, nana::rectangle(0, 0, formWidth, formHeight) };

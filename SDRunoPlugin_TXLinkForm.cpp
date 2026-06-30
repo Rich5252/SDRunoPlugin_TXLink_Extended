@@ -1,53 +1,23 @@
 #include <sstream>
 #ifdef _WIN32
 #include <Windows.h>
-#include <winuser.h>
 #endif
 
 #include "SDRunoPlugin_TXLinkForm.h"
 #include "SDRunoPlugin_TXLinkSettingsDialog.h"
 #include "SDRunoPlugin_TXLinkATUDialog.h"
 #include "SDRunoPlugin_TXLinkUi.h"
-#include "SDRunoPlugin_TXLink.h"
 #include "UDP_Server.h"
-#include "resource.h"
 #include "RTTY_Server.h"
 #include "DXspiderClient.h"
-#include "FindWindowTitleRoot.h"
 #include "Heartbeat.h"
 #include "SDRUnoHelper.h"
 
 #include <nana/gui.hpp>
-#include <nana/gui/widgets/button.hpp>
 #include <nana/gui/widgets/listbox.hpp>
 #include <nana/gui/widgets/label.hpp>
-#include <nana/gui/widgets/textbox.hpp>
-#include <nana/gui/timer.hpp>
-#include <nana/gui/widgets/picture.hpp>
-#include <nana/gui/dragger.hpp>
 #include <nana/gui/programming_interface.hpp> // Often where 'main_thread_dispatch' lives
 
-
-#define VERSION "V3.0"
-
-// Serial commands from PC TXlink sent to Arduino
-// {Bn}     Ext PA fan hold time minutes
-// {Cn}     DDS Frequency calibration  
-// {D}      Power Down (TX off)
-// {Fn}     TX frequency
-// {Hn}     TX key up hold time ms
-// {L%}     Local PA level (QRP)
-// {P%)     External PA power level
-// {Q0/1}   External PA Off/On
-// {U}      Power Up (TX On)
-// {V%}		FT8 TX start delay ms (default 250ms)
-// {W%}     TX FT8 watchdog - millisecs to end of this tx period
-// {X0/1)   FT8 TX on/off
-// {Yn}     FT8 TXDF (delta freq)
-// {Zmsg}   FT8 message
-
-
-HWND UNOhwnd = NULL;
 
 
 // Form constructor with handles to parent and uno controller - launches form Setup
@@ -77,597 +47,9 @@ void SDRunoPlugin_TXLinkForm::Run()
 	//$m_parent.FormExitAllRequest = false;		//tell parent closedown function that nana forms have exited
 }
 
-
-
-// Create the initial plugin form
-void SDRunoPlugin_TXLinkForm::Setup()
-{
-	// This first section is all related to the background and border
-	// it shouldn't need to be changed
-	nana::paint::image img_border;
-	nana::paint::image img_inner;
-	HMODULE hModule = NULL;
-	HRSRC rc_border = NULL;
-	HRSRC rc_inner = NULL;
-	HRSRC rc_close = NULL;
-	HRSRC rc_close_over = NULL;
-	HRSRC rc_min = NULL;
-	HRSRC rc_min_over = NULL;
-	HRSRC rc_bar = NULL;
-	HRSRC rc_sett = NULL;
-	HRSRC rc_sett_over = NULL;
-	HBITMAP bm_border = NULL;
-	HBITMAP bm_inner = NULL;
-	HBITMAP bm_close = NULL;
-	HBITMAP bm_close_over = NULL;
-	HBITMAP bm_min = NULL;
-	HBITMAP bm_min_over = NULL;
-	HBITMAP bm_bar = NULL;
-	HBITMAP bm_sett = NULL;
-	HBITMAP bm_sett_over = NULL;
-	BITMAPINFO bmInfo_border = { 0 };
-	BITMAPINFO bmInfo_inner = { 0 };
-	BITMAPINFO bmInfo_close = { 0 };
-	BITMAPINFO bmInfo_close_over = { 0 };
-	BITMAPINFO bmInfo_min = { 0 };
-	BITMAPINFO bmInfo_min_over = { 0 };
-	BITMAPINFO bmInfo_bar = { 0 };
-	BITMAPINFO bmInfo_sett = { 0 };
-	BITMAPINFO bmInfo_sett_over = { 0 };
-	BITMAPFILEHEADER borderHeader = { 0 };
-	BITMAPFILEHEADER innerHeader = { 0 };
-	BITMAPFILEHEADER closeHeader = { 0 };
-	BITMAPFILEHEADER closeoverHeader = { 0 };
-	BITMAPFILEHEADER minHeader = { 0 };
-	BITMAPFILEHEADER minoverHeader = { 0 };
-	BITMAPFILEHEADER barHeader = { 0 };
-	BITMAPFILEHEADER settHeader = { 0 };
-	BITMAPFILEHEADER settoverHeader = { 0 };
-	HDC hdc = NULL;
-	BYTE* borderPixels = NULL;
-	BYTE* innerPixels = NULL;
-	BYTE* closePixels = NULL;
-	BYTE* closeoverPixels = NULL;
-	BYTE* minPixels = NULL;
-	BYTE* minoverPixels = NULL;
-	BYTE* barPixels = NULL;
-	BYTE* barfocusedPixels = NULL;
-	BYTE* settPixels = NULL;
-	BYTE* settoverPixels = NULL;
-	const unsigned int rawDataOffset = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFO);
-	hModule = GetModuleHandle(L"SDRunoPlugin_TXLink");
-	hdc = GetDC(NULL);
-	rc_border = FindResource(hModule, MAKEINTRESOURCE(IDB_BG_BORDER), RT_BITMAP);
-	rc_inner = FindResource(hModule, MAKEINTRESOURCE(IDB_BACKGROUND), RT_BITMAP);
-	rc_close = FindResource(hModule, MAKEINTRESOURCE(IDB_CLOSE), RT_BITMAP);
-	rc_close_over = FindResource(hModule, MAKEINTRESOURCE(IDB_CLOSE_DOWN), RT_BITMAP);
-	rc_min = FindResource(hModule, MAKEINTRESOURCE(IDB_MIN), RT_BITMAP);
-	rc_min_over = FindResource(hModule, MAKEINTRESOURCE(IDB_MIN_DOWN), RT_BITMAP);
-	rc_bar = FindResource(hModule, MAKEINTRESOURCE(IDB_HEADER), RT_BITMAP);
-	rc_sett = FindResource(hModule, MAKEINTRESOURCE(IDB_SETT), RT_BITMAP);
-	rc_sett_over = FindResource(hModule, MAKEINTRESOURCE(IDB_SETT_DOWN), RT_BITMAP);
-	bm_border = (HBITMAP)LoadImage(hModule, MAKEINTRESOURCE(IDB_BG_BORDER), IMAGE_BITMAP, 0, 0, LR_COPYFROMRESOURCE);
-	bm_inner = (HBITMAP)LoadImage(hModule, MAKEINTRESOURCE(IDB_BACKGROUND), IMAGE_BITMAP, 0, 0, LR_COPYFROMRESOURCE);
-	bm_close = (HBITMAP)LoadImage(hModule, MAKEINTRESOURCE(IDB_CLOSE), IMAGE_BITMAP, 0, 0, LR_COPYFROMRESOURCE);
-	bm_close_over = (HBITMAP)LoadImage(hModule, MAKEINTRESOURCE(IDB_CLOSE_DOWN), IMAGE_BITMAP, 0, 0, LR_COPYFROMRESOURCE);
-	bm_min = (HBITMAP)LoadImage(hModule, MAKEINTRESOURCE(IDB_MIN), IMAGE_BITMAP, 0, 0, LR_COPYFROMRESOURCE);
-	bm_min_over = (HBITMAP)LoadImage(hModule, MAKEINTRESOURCE(IDB_MIN_DOWN), IMAGE_BITMAP, 0, 0, LR_COPYFROMRESOURCE);
-	bm_bar = (HBITMAP)LoadImage(hModule, MAKEINTRESOURCE(IDB_HEADER), IMAGE_BITMAP, 0, 0, LR_COPYFROMRESOURCE);
-	bm_sett = (HBITMAP)LoadImage(hModule, MAKEINTRESOURCE(IDB_SETT), IMAGE_BITMAP, 0, 0, LR_COPYFROMRESOURCE);
-	bm_sett_over = (HBITMAP)LoadImage(hModule, MAKEINTRESOURCE(IDB_SETT_DOWN), IMAGE_BITMAP, 0, 0, LR_COPYFROMRESOURCE);
-	bmInfo_border.bmiHeader.biSize = sizeof(bmInfo_border.bmiHeader);
-	bmInfo_inner.bmiHeader.biSize = sizeof(bmInfo_inner.bmiHeader);
-	bmInfo_close.bmiHeader.biSize = sizeof(bmInfo_close.bmiHeader);
-	bmInfo_close_over.bmiHeader.biSize = sizeof(bmInfo_close_over.bmiHeader);
-	bmInfo_min.bmiHeader.biSize = sizeof(bmInfo_min.bmiHeader);
-	bmInfo_min_over.bmiHeader.biSize = sizeof(bmInfo_min_over.bmiHeader);
-	bmInfo_bar.bmiHeader.biSize = sizeof(bmInfo_bar.bmiHeader);
-	bmInfo_sett.bmiHeader.biSize = sizeof(bmInfo_sett.bmiHeader);
-	bmInfo_sett_over.bmiHeader.biSize = sizeof(bmInfo_sett_over.bmiHeader);
-	GetDIBits(hdc, bm_border, 0, 0, NULL, &bmInfo_border, DIB_RGB_COLORS);
-	GetDIBits(hdc, bm_inner, 0, 0, NULL, &bmInfo_inner, DIB_RGB_COLORS);
-	GetDIBits(hdc, bm_close, 0, 0, NULL, &bmInfo_close, DIB_RGB_COLORS);
-	GetDIBits(hdc, bm_close_over, 0, 0, NULL, &bmInfo_close_over, DIB_RGB_COLORS);
-	GetDIBits(hdc, bm_min, 0, 0, NULL, &bmInfo_min, DIB_RGB_COLORS);
-	GetDIBits(hdc, bm_min_over, 0, 0, NULL, &bmInfo_min_over, DIB_RGB_COLORS);
-	GetDIBits(hdc, bm_bar, 0, 0, NULL, &bmInfo_bar, DIB_RGB_COLORS);
-	GetDIBits(hdc, bm_sett, 0, 0, NULL, &bmInfo_sett, DIB_RGB_COLORS);
-	GetDIBits(hdc, bm_sett_over, 0, 0, NULL, &bmInfo_sett_over, DIB_RGB_COLORS);
-	bmInfo_border.bmiHeader.biCompression = BI_RGB;
-	bmInfo_inner.bmiHeader.biCompression = BI_RGB;
-	bmInfo_close.bmiHeader.biCompression = BI_RGB;
-	bmInfo_close_over.bmiHeader.biCompression = BI_RGB;
-	bmInfo_min.bmiHeader.biCompression = BI_RGB;
-	bmInfo_min_over.bmiHeader.biCompression = BI_RGB;
-	bmInfo_bar.bmiHeader.biCompression = BI_RGB;
-	bmInfo_sett.bmiHeader.biCompression = BI_RGB;
-	bmInfo_sett_over.bmiHeader.biCompression = BI_RGB;
-	borderHeader.bfOffBits = rawDataOffset;
-	borderHeader.bfSize = bmInfo_border.bmiHeader.biSizeImage;
-	borderHeader.bfType = 0x4D42;
-	innerHeader.bfOffBits = rawDataOffset;
-	innerHeader.bfSize = bmInfo_inner.bmiHeader.biSizeImage;
-	innerHeader.bfType = 0x4D42;
-	closeHeader.bfOffBits = rawDataOffset;
-	closeHeader.bfSize = bmInfo_close.bmiHeader.biSizeImage;
-	closeHeader.bfType = 0x4D42;
-	closeoverHeader.bfOffBits = rawDataOffset;
-	closeoverHeader.bfSize = bmInfo_close_over.bmiHeader.biSizeImage;
-	closeoverHeader.bfType = 0x4D42;
-	minHeader.bfOffBits = rawDataOffset;
-	minHeader.bfSize = bmInfo_min.bmiHeader.biSizeImage;
-	minHeader.bfType = 0x4D42;
-	minoverHeader.bfOffBits = rawDataOffset;
-	minoverHeader.bfSize = bmInfo_min_over.bmiHeader.biSizeImage;
-	minoverHeader.bfType = 0x4D42;
-	barHeader.bfOffBits = rawDataOffset;
-	barHeader.bfSize = bmInfo_bar.bmiHeader.biSizeImage;
-	barHeader.bfType = 0x4D42;
-	settHeader.bfOffBits = rawDataOffset;
-	settHeader.bfSize = bmInfo_sett.bmiHeader.biSizeImage;
-	settHeader.bfType = 0x4D42;
-	settoverHeader.bfOffBits = rawDataOffset;
-	settoverHeader.bfSize = bmInfo_sett_over.bmiHeader.biSizeImage;
-	settoverHeader.bfType = 0x4D42;
-	borderPixels = new BYTE[bmInfo_border.bmiHeader.biSizeImage + rawDataOffset];
-	innerPixels = new BYTE[bmInfo_inner.bmiHeader.biSizeImage + rawDataOffset];
-	closePixels = new BYTE[bmInfo_close.bmiHeader.biSizeImage + rawDataOffset];
-	closeoverPixels = new BYTE[bmInfo_close_over.bmiHeader.biSizeImage + rawDataOffset];
-	minPixels = new BYTE[bmInfo_min.bmiHeader.biSizeImage + rawDataOffset];
-	minoverPixels = new BYTE[bmInfo_min_over.bmiHeader.biSizeImage + rawDataOffset];
-	barPixels = new BYTE[bmInfo_bar.bmiHeader.biSizeImage + rawDataOffset];
-	settPixels = new BYTE[bmInfo_sett.bmiHeader.biSizeImage + rawDataOffset];
-	settoverPixels = new BYTE[bmInfo_sett_over.bmiHeader.biSizeImage + rawDataOffset];
-	*(BITMAPFILEHEADER*)borderPixels = borderHeader;
-	*(BITMAPINFO*)(borderPixels + sizeof(BITMAPFILEHEADER)) = bmInfo_border;
-	*(BITMAPFILEHEADER*)innerPixels = innerHeader;
-	*(BITMAPINFO*)(innerPixels + sizeof(BITMAPFILEHEADER)) = bmInfo_inner;
-	*(BITMAPFILEHEADER*)closePixels = closeHeader;
-	*(BITMAPINFO*)(closePixels + sizeof(BITMAPFILEHEADER)) = bmInfo_close;
-	*(BITMAPFILEHEADER*)closeoverPixels = closeoverHeader;
-	*(BITMAPINFO*)(closeoverPixels + sizeof(BITMAPFILEHEADER)) = bmInfo_close_over;
-	*(BITMAPFILEHEADER*)minPixels = minHeader;
-	*(BITMAPINFO*)(minPixels + sizeof(BITMAPFILEHEADER)) = bmInfo_min;
-	*(BITMAPFILEHEADER*)minoverPixels = minoverHeader;
-	*(BITMAPINFO*)(minoverPixels + sizeof(BITMAPFILEHEADER)) = bmInfo_min_over;
-	*(BITMAPFILEHEADER*)barPixels = barHeader;
-	*(BITMAPINFO*)(barPixels + sizeof(BITMAPFILEHEADER)) = bmInfo_bar;
-	*(BITMAPFILEHEADER*)settPixels = settHeader;
-	*(BITMAPINFO*)(settPixels + sizeof(BITMAPFILEHEADER)) = bmInfo_sett;
-	*(BITMAPFILEHEADER*)settoverPixels = settoverHeader;
-	*(BITMAPINFO*)(settoverPixels + sizeof(BITMAPFILEHEADER)) = bmInfo_sett_over;
-	GetDIBits(hdc, bm_border, 0, bmInfo_border.bmiHeader.biHeight, (LPVOID)(borderPixels + rawDataOffset), &bmInfo_border, DIB_RGB_COLORS);
-	GetDIBits(hdc, bm_inner, 0, bmInfo_inner.bmiHeader.biHeight, (LPVOID)(innerPixels + rawDataOffset), &bmInfo_inner, DIB_RGB_COLORS);
-	GetDIBits(hdc, bm_close, 0, bmInfo_close.bmiHeader.biHeight, (LPVOID)(closePixels + rawDataOffset), &bmInfo_close, DIB_RGB_COLORS);
-	GetDIBits(hdc, bm_close_over, 0, bmInfo_close_over.bmiHeader.biHeight, (LPVOID)(closeoverPixels + rawDataOffset), &bmInfo_close_over, DIB_RGB_COLORS);
-	GetDIBits(hdc, bm_min, 0, bmInfo_min.bmiHeader.biHeight, (LPVOID)(minPixels + rawDataOffset), &bmInfo_min, DIB_RGB_COLORS);
-	GetDIBits(hdc, bm_min_over, 0, bmInfo_min_over.bmiHeader.biHeight, (LPVOID)(minoverPixels + rawDataOffset), &bmInfo_min_over, DIB_RGB_COLORS);
-	GetDIBits(hdc, bm_bar, 0, bmInfo_bar.bmiHeader.biHeight, (LPVOID)(barPixels + rawDataOffset), &bmInfo_bar, DIB_RGB_COLORS);
-	GetDIBits(hdc, bm_sett, 0, bmInfo_sett.bmiHeader.biHeight, (LPVOID)(settPixels + rawDataOffset), &bmInfo_sett, DIB_RGB_COLORS);
-	GetDIBits(hdc, bm_sett_over, 0, bmInfo_sett_over.bmiHeader.biHeight, (LPVOID)(settoverPixels + rawDataOffset), &bmInfo_sett_over, DIB_RGB_COLORS);
-	img_border.open(borderPixels, bmInfo_border.bmiHeader.biSizeImage);
-	img_inner.open(innerPixels, bmInfo_inner.bmiHeader.biSizeImage);
-	img_close_normal.open(closePixels, bmInfo_close.bmiHeader.biSizeImage);
-	img_close_down.open(closeoverPixels, bmInfo_close_over.bmiHeader.biSizeImage);
-	img_min_normal.open(minPixels, bmInfo_min.bmiHeader.biSizeImage);
-	img_min_down.open(minoverPixels, bmInfo_min_over.bmiHeader.biSizeImage);
-	img_header.open(barPixels, bmInfo_bar.bmiHeader.biSizeImage);
-	img_sett_normal.open(settPixels, bmInfo_sett.bmiHeader.biSizeImage);
-	img_sett_down.open(settoverPixels, bmInfo_sett_over.bmiHeader.biSizeImage);
-	ReleaseDC(NULL, hdc);
-	bg_border.load(img_border, nana::rectangle(0, 0, 590, 340));
-	bg_border.stretchable(0, 0, 0, 0);
-	bg_border.transparent(true);
-	bg_inner.load(img_inner, nana::rectangle(0, 0, 582, 299));
-	bg_inner.stretchable(sideBorderWidth, 0, sideBorderWidth, bottomBarHeight);
-	bg_inner.transparent(false);
-	const uint32_t forecolor = 0xffffff;
-
-
-	// This code sets the plugin size, title and what to do when the X is pressed
-	size(nana::size(formWidth, formHeight));
-	caption("SDRuno Plugin TXlink");
-	//events().destroy([&] { m_parent.FormClosed(); });
-	//events().unload([&] { m_parent.FormUnload(); });
-	events().unload([&](const nana::arg_unload& arg)					//called when X is pressed, request unload from controller
-		{
-			std::cout << std::endl << get_millis() << " SDRunoPlugin_TXLinkForm:: nana form exit clicked. UnloadInProgress = " << std::boolalpha << UnloadInProgress << std::endl;
-			if (!UnloadInProgress) { m_parent.RequestDllUnload(); }								//ask SDRUno to unload this plugin if not already in progress
-			arg.cancel = true;							// Now, cancel the unload. This prevents the form from closing so saves and clean up happens from the top.
-		});
-
-
-	//Initialize header bar
-	header_bar.size(nana::size(122, 20));
-	header_bar.load(img_header, nana::rectangle(0, 0, 122, 20));
-	header_bar.stretchable(0, 0, 0, 0);
-	header_bar.move(nana::point((formWidth / 2) - 61, 5));
-	header_bar.transparent(true);
-
-	//Initial header text 
-	title_bar_label.size(nana::size(65, 12));
-	title_bar_label.move(nana::point((formWidth / 2) - 5, 9));
-	title_bar_label.format(true);
-	title_bar_label.caption("< bold size = 6 color = 0x000000 font = \"Verdana\">TXlink</>");
-	title_bar_label.text_align(nana::align::center, nana::align_v::center);
-	title_bar_label.fgcolor(nana::color_rgb(0x000000));
-	title_bar_label.transparent(true);
-
-	//Iniitialize drag_label
-	form_drag_label.move(nana::point(0, 0));
-	form_drag_label.transparent(true);
-
-	//Initialize dragger and set target to form, and trigger to drag_label 
-	form_dragger.target(*this);
-	form_dragger.trigger(form_drag_label);
-
-	//Initialise the "Minimize button"
-	min_button.load(img_min_normal, nana::rectangle(0, 0, 20, 15));
-	min_button.bgcolor(nana::color_rgb(0x000000));
-	min_button.move(nana::point(formWidth - 51, 9));
-	min_button.transparent(true);
-	min_button.events().mouse_down([&] { min_button.load(img_min_down, nana::rectangle(0, 0, 20, 15)); });
-	min_button.events().mouse_up([&] { min_button.load(img_min_normal, nana::rectangle(0, 0, 20, 15)); nana::API::zoom_window(this->handle(), false); });
-	min_button.events().mouse_leave([&] { min_button.load(img_min_normal, nana::rectangle(0, 0, 20, 15)); });
-
-	//Initialise the "Close button"
-	close_button.load(img_close_normal, nana::rectangle(0, 0, 20, 15));
-	close_button.bgcolor(nana::color_rgb(0x000000));
-	close_button.move(nana::point(formWidth - 26, 9));
-	close_button.transparent(true);
-	close_button.events().mouse_down([&] { close_button.load(img_close_down, nana::rectangle(0, 0, 20, 15)); });
-	close_button.events().mouse_up([&] { close_button.load(img_close_normal, nana::rectangle(0, 0, 20, 15)); close(); });
-	close_button.events().mouse_leave([&] { close_button.load(img_close_normal, nana::rectangle(0, 0, 20, 15)); });
-
-	//Uncomment the following block of code to Initialise the "Setting button"
-	sett_button.load(img_sett_normal, nana::rectangle(0, 0, 40, 15));
-	sett_button.bgcolor(nana::color_rgb(0x000000));
-	sett_button.move(nana::point(10, 9));
-	sett_button.events().mouse_down([&] { sett_button.load(img_sett_down, nana::rectangle(0, 0, 40, 15)); });
-	sett_button.events().mouse_up([&] { sett_button.load(img_sett_normal, nana::rectangle(0, 0, 40, 15)); SettingsButton_Click(); });
-	sett_button.events().mouse_leave([&] { sett_button.load(img_sett_normal, nana::rectangle(0, 0, 40, 15)); });
-	sett_button.tooltip("Show settings window");
-	sett_button.transparent(true);
-
-	versionLbl.fgcolor(nana::colors::white);
-	versionLbl.caption(VERSION);
-	versionLbl.transparent(true);
-	versionLbl.events().click([&] {
-		ReTransmit();
-		});
-
-
-	// TODO: Form code starts here
-	COMportTb.multi_lines(false);
-	COMportTb.events().text_changed([&] {
-		string strCOM = COMportTb.caption();
-		strCOM = COMportPrefix + strCOM;
-		Serial.ReOpenPort(strCOM, COM_BAUD_RATE, false);
-		});
-
-	string strCOM = LoadCOM();
-	if (strCOM == "")
-	{
-		strCOM = "COM5";			//default if not in ini file
-	}
-	// and reset serial
-	COMportTb.caption(strCOM);		//this triggers event and opens/resets port on startup
-
-	LoadSplitMode();		//load split mode from ini file, used to know if first UDP call changes to data mode.
-	SplitMode == SplitNone ? FixFreqBtn.caption("Split") : FixFreqBtn.caption("UnSplit");
-	FixFreqBtn.edge_effects(true);
-	FixFreqBtn.events().click([&]
-		{
-			FixFreqBtnClicked();
-		});
-
-
-	FixTXupBtn.caption("TX UP");
-	FixTXupBtn.edge_effects(true);
-	FixTXupBtn.events().click([&]
-		{
-			FixTXup();
-		});
-
-	ResetRXFreqBtn.caption("RX<-TX");
-	ResetRXFreqBtn.edge_effects(true);
-	ResetRXFreqBtn.events().click([&]
-		{
-			SetRXFreq();
-		});
-
-	SwapTxRxBtn.caption("Swap");
-	SwapTxRxBtn.edge_effects(true);
-	SwapTxRxBtn.events().click([&]
-		{
-			SwapTxRxFreq();
-		});
-
-	RITchkbox.fgcolor(nana::color_rgb(forecolor));
-	RITchkbox.transparent(true);
-	RITchkbox.caption("RIT");
-	RITchkbox.check(LoadRIT() == "true");
-
-	OFSchkbox.fgcolor(nana::color_rgb(forecolor));
-	OFSchkbox.transparent(true);
-	OFSchkbox.caption("OFS");
-	OFSchkbox.check(LoadOFS() == "true");
-
-
-	StandbyBtn.caption("Set TX on");
-	StandbyBtn.edge_effects(true);
-	StandbyBtn.events().click([&]
-		{
-			if (!StandbyMode)
-			{
-				StandbyBtn.caption("Set TX on");
-				StandbyMode = true;
-			}
-			else
-			{
-				StandbyBtn.caption("Set TX off");
-				StandbyMode = false;
-				TXtempLbl.fgcolor(nana::colors::white);
-			}
-			SetStandbyMode(StandbyMode);
-		});
-	SetStandbyMode(StandbyMode);
-
-	UNOhwnd = FindTargetWindow(L"SDRuno Main 0", true);							//find UNOhwnd for main SDRuno window
-
-	// Load X and Y location for the form from the ini file (if exists)
-	int posX = LoadX();
-	int posY = LoadY();
-	if (posX >= 0 && posY >= 0)
-	{
-		move(posX, posY);
-	}
-
-
-
-	// TODO: Extra Form code goes here
-	freqTb.bgcolor(nana::colors::white);
-	freqTb.borderless(false);
-	freqTb.text_align(nana::align::center);
-
-	if (Serial.Connected()) {
-		COMportTb.bgcolor(nana::colors::green);
-		COMportTb.fgcolor(nana::colors::white);
-	}
-	SendRXfreq();
-
-	freqTbLbl.caption("TX freq Hz");
-	freqTbLbl.fgcolor(nana::color_rgb(forecolor));
-	freqTbLbl.transparent(true);
-
-	FT8Lbl.format(true);
-	FT8Lbl.caption("<bold=true size=10>" + DigiTXmodeStr + "</>");		//"<bold size = 12>" + strTXfreq + "< / >"
-	FT8Lbl.fgcolor(nana::color_rgb(forecolor));
-	FT8Lbl.transparent(true);
-	FT8txOnLbl.caption("");
-	FT8txOnLbl.bgcolor(nana::colors::light_grey);
-	FT8msgLbl.caption("");
-	FT8msgLbl.fgcolor(nana::color_rgb(forecolor));
-	FT8msgLbl.transparent(true);
-
-	TXlevelLbl.caption("TX Level %");
-	TXlevelLbl.fgcolor(nana::color_rgb(forecolor));
-	TXlevelLbl.transparent(true);
-	TXleveldBLbl.caption("-99dB");
-	TXleveldBLbl.fgcolor(nana::color_rgb(forecolor));
-	TXleveldBLbl.transparent(true);
-
-	TXtempLbl.caption("? degC");
-	TXtempLbl.fgcolor(nana::color_rgb(forecolor));
-	TXtempLbl.transparent(true);
-
-	TXlevelTb.multi_lines(false);
-	TXlevelTb.events().text_changed([&] {
-		string strTXlevel = TXlevelTb.caption();
-		SendTXlevel(strTXlevel);
-		});
-
-	string strTXlevel = LoadTXlevel();		//get stored ini file
-	if (strTXlevel == "")
-	{
-		strTXlevel = "0";			//default if not in ini file
-	}
-
-	PAlevelLbl.caption("Ext PA Drive %");
-	PAlevelLbl.fgcolor(nana::color_rgb(forecolor));
-	PAlevelLbl.transparent(true);
-	PAleveldBLbl.caption("-99dB");
-	PAleveldBLbl.fgcolor(nana::color_rgb(forecolor));
-	PAleveldBLbl.transparent(true);
-	PAchkbox.fgcolor(nana::color_rgb(forecolor));
-	PAchkbox.transparent(true);
-	PAchkbox.caption("QRO");
-
-	PAlevelTb.multi_lines(false);
-	PAlevelTb.events().text_changed([&] {
-		string strPAlevel = PAlevelTb.caption();
-		SendPAlevel(strPAlevel);
-		SendPAstate(PAchkbox.checked());
-		});
-	PAchkbox.events().click([&] {
-		SendPAstate(PAchkbox.checked());
-		string strPAlevel = PAlevelTb.caption();
-		SendPAlevel(strPAlevel);
-		});
-
-	MuteTXchkbox.fgcolor(nana::color_rgb(forecolor));
-	MuteTXchkbox.transparent(true);
-	MuteTXchkbox.caption("Mute TX");
-	MuteTXchkbox.check(true);
-	MuteTXchkbox.events().click([&] {
-		SetMuteTX(MuteTXchkbox.checked());
-		});
-
-	string strPAlevel = LoadPAlevel();		//get stored ini file
-	if (strPAlevel == "")
-	{
-		strPAlevel = "0";			//default if not in ini file
-	}
-
-	//SWR row
-	SWRFWDlbl.caption("FWD");
-	SWRFWDlbl.fgcolor(nana::color_rgb(forecolor));
-	SWRFWDlbl.transparent(true);
-	SWRFWDlbl.text_align(nana::align::right);
-	SWRFWDtxt.bgcolor(nana::colors::white);
-	SWRFWDtxt.fgcolor(nana::colors::black);
-	SWRFWDtxt.borderless(false);
-	SWRFWDtxt.text_align(nana::align::right);
-
-	SWRREFlbl.caption("REF");
-	SWRREFlbl.fgcolor(nana::color_rgb(forecolor));
-	SWRREFlbl.transparent(true);
-	SWRREFlbl.text_align(nana::align::right);
-	SWRREFtxt.bgcolor(nana::colors::white);
-	SWRREFtxt.fgcolor(nana::colors::black);
-	SWRREFtxt.borderless(false);
-	SWRREFtxt.text_align(nana::align::right);
-
-	SWRSWRlbl.caption("SWR");
-	SWRSWRlbl.fgcolor(nana::color_rgb(forecolor));
-	SWRSWRlbl.transparent(true);
-	SWRSWRlbl.text_align(nana::align::right);
-	SWRSWRtxt.bgcolor(nana::colors::white);
-	SWRSWRtxt.fgcolor(nana::colors::black);
-	SWRSWRtxt.borderless(false);
-	SWRSWRtxt.text_align(nana::align::right);
-
-	AtuBtn.caption("T");
-	AtuBtn.edge_effects(true);
-	bATUformOpen = false;
-	AtuBtn.events().click([&]
-		{
-			AtuBtnClicked();
-		});
-
-	DXspotBtn.caption("DX");
-	DXspotBtn.edge_effects(true);
-	DXspotBtn.events().click([&]
-		{
-			DXspotBtnClicked();
-		});
-
-	nLastCall = -1;
-	for (int i = 0; i < nCalls; i++)
-	{
-		strLastTenCalls[i] = "";
-	}
-
-
-	// set text boxes to last saved defaults from SDRuno ini file
-	TXlevelTb.caption(strTXlevel);		//this triggers event and opens/resets port on startup
-	PAlevelTb.caption(strPAlevel);		//this triggers event and opens/resets port on startup
-
-	m_timer.interval(std::chrono::milliseconds(5));			//this is just the time between finishing one timer event and starting the next, 
-	//  not the actual timer interval
-// this next call sets the code to be executed after every interval
-	m_timer.elapse([&]
-		{
-			try
-			{
-				m_timer.stop();
-				OnTimer();
-				m_timer.start();
-			}
-			catch (const std::exception& e)
-			{
-				std::cout << get_millis() << " *** OnTimer EXCEPTION: " << e.what() << std::endl;
-				m_timer.start();   // restart anyway, so we don't permanently lose the timer
-			}
-			catch (...)
-			{
-				std::cout << get_millis() << " *** OnTimer UNKNOWN EXCEPTION (non-std::exception type)" << std::endl;
-				m_timer.start();
-			}
-		});
-
-	m_timer.start();
-
-	LoadRTCdelay();
-	udp_poller.interval(std::chrono::milliseconds(10));
-	//udp_poller.start();		// NOT STARTED - left over from the old dual-timer design;
-								// UDP processing now happens via OnTimer() -> ProcessUDPEvent()
-								// every m_timer tick instead (see OnTimer above), to avoid the
-								// cross-timer re-entrancy issue two independent Nana timers caused.
-	udp_poller.elapse([&] {
-		udp_poller.stop();						// Stop it immediately so it only runs once
-		ProcessUDPEvent();						// drains UDPStatusQueue internally; safe even if called
-		udp_poller.start();						// Restart the timer for the next event
-		});
-
-	m_tunerPoller.interval(std::chrono::milliseconds(5));   // 5ms; raise to 10ms if 5 feels unnecessary, lower if you want even tighter response
-	m_tunerPoller.elapse([this]
-		{
-			DrainTunerQueue();
-		});
-	//m_tunerPoller.start();
-
-
-	//Note initial values sent to TXlink Arduino in ProcessIncomingSerial() which detects startup message from it
-}
-
-string SDRunoPlugin_TXLinkForm::GetCOM()
-{
-	return COMportTb.caption();
-}
-
-
-string SDRunoPlugin_TXLinkForm::GetTXlevel()
-{
-	return TXlevelTb.caption();
-}
-
-string SDRunoPlugin_TXLinkForm::GetPAlevel()
-{
-	return PAlevelTb.caption();
-}
-
-string SDRunoPlugin_TXLinkForm::GetRIT()
-{
-	string ret = RITchkbox.checked() ? "true" : "false";
-	return ret;
-}
-
-void SDRunoPlugin_TXLinkForm::SetRIT(string RIT)
-{
-	RITchkbox.check(RIT == "true");
-}
-
-string SDRunoPlugin_TXLinkForm::GetOFS()
-{
-	string ret = OFSchkbox.checked() ? "true" : "false";
-	return ret;
-}
-
-void SDRunoPlugin_TXLinkForm::SetOFS(string RIT)
-{
-	OFSchkbox.check(RIT == "true");
-}
-
-void SDRunoPlugin_TXLinkForm::SetStandbyMode(bool Mode)
-{
-	bool is_sent = false;
-	if (Serial.Connected())
-	{
-		string str = "{D}";
-		if (!Mode)
-		{
-			//make sure TX levels and QRO mode are set correctly
-			string strTXlevel = TXlevelTb.caption();
-			SendTXlevel(strTXlevel);
-			string strPAlevel = PAlevelTb.caption();
-			SendPAlevel(strPAlevel);
-			SendPAstate(PAchkbox.checked());
-			str = "{U}";
-		}
-		is_sent = Serial.WriteSerialPort(str);
-	}
-}
+//This is main processing function for the form and it handles all of the incoming messages and serial data.
+//Note multiple timers can cause event interruption on the thread so were difficult to make thread safe.
+// This is why we use a single timer and message queues to handle all of the events in a single thread.
 
 void SDRunoPlugin_TXLinkForm::OnTimer()
 {
@@ -723,9 +105,67 @@ void SDRunoPlugin_TXLinkForm::OnTimer()
 
 	// look for incoming serial and UDP on timer event
 	TRY_STEP("ProcessIncomingSerial", ProcessIncomingSerial());
-	//ProcessUDPEvent();						//now triggered by separate udp_poller timer
 
 }
+
+
+string SDRunoPlugin_TXLinkForm::GetCOM()
+{
+	return COMportTb.caption();
+}
+
+string SDRunoPlugin_TXLinkForm::GetTXlevel()
+{
+	return TXlevelTb.caption();
+}
+
+string SDRunoPlugin_TXLinkForm::GetPAlevel()
+{
+	return PAlevelTb.caption();
+}
+
+string SDRunoPlugin_TXLinkForm::GetRIT()
+{
+	string ret = RITchkbox.checked() ? "true" : "false";
+	return ret;
+}
+
+void SDRunoPlugin_TXLinkForm::SetRIT(string RIT)
+{
+	RITchkbox.check(RIT == "true");
+}
+
+string SDRunoPlugin_TXLinkForm::GetOFS()
+{
+	string ret = OFSchkbox.checked() ? "true" : "false";
+	return ret;
+}
+
+void SDRunoPlugin_TXLinkForm::SetOFS(string RIT)
+{
+	OFSchkbox.check(RIT == "true");
+}
+
+void SDRunoPlugin_TXLinkForm::SetStandbyMode(bool Mode)
+{
+	bool is_sent = false;
+	if (Serial.Connected())
+	{
+		string str = "{D}";
+		if (!Mode)
+		{
+			//make sure TX levels and QRO mode are set correctly
+			string strTXlevel = TXlevelTb.caption();
+			SendTXlevel(strTXlevel);
+			string strPAlevel = PAlevelTb.caption();
+			SendPAlevel(strPAlevel);
+			SendPAstate(PAchkbox.checked());
+			str = "{U}";
+		}
+		is_sent = Serial.WriteSerialPort(str);
+	}
+}
+
 
 void SDRunoPlugin_TXLinkForm::CheckWindowState()
 {
@@ -768,520 +208,8 @@ std::string SDRunoPlugin_TXLinkForm::AddThousandsSeparator(int64_t value)
 	return negative ? "-" + result : result;
 }
 
-void SDRunoPlugin_TXLinkForm::ProcessMessageQueue()
-{
-	// Process msgs to be sent to hardware
-
-	std::string message = "";
-	bool bMsgDone = false;
-	while (!bMsgDone)
-	{
-		{
-			std::lock_guard<std::mutex> lock(m_queueMutex);
-			if (m_messageQueue.empty()) {
-				bMsgDone = true;
-			}
-			else
-			{
-				message = m_messageQueue.front();
-				m_messageQueue.pop();
-				bMsgDone = false;
-			}
-		}
-
-		if (bMsgDone) { return; }
-
-		// special cases
-		if (message == "$SendRXfreq$")
-		{
-			TRY_STEP("SendRXfreq", SendRXfreq());
-			return;
-		}
-		else if (message == "$SendTXfreq$")
-		{
-			TRY_STEP("SendTXfreq", SendTXfreq());
-			return;
-		}
-		else if (message == "$SaveIniData$")
-		{
-			TRY_STEP("SaveIniData", SaveIniData());
-			return;
-		}
-		else
-		{
-			if (message.rfind("RTTY:", 0) == 0) { // Command starts with "RTTY:"
-				std::string rttyCmdText = message.substr(5); // Extract text after "RTTY:"
-				message = ProcessRTTYcommand(rttyCmdText);
-			}
-
-			// Send serial message string to Arduino
-			_SendSerialMsg(message);
-		}
-	}
-}
-
-// Process frequency changes from SDRuno thread (via HandleEvent() in SDRunoPlugin_TXLink.cpp)
-void SDRunoPlugin_TXLinkForm::QueueFrequencyChanged(double freq0, double freq1)
-{
-	std::lock_guard<std::mutex> lock(m_freqQueueMutex);
-	m_freqQueue.push({ freq0, freq1 });
-}
 
 
-// Called from OnTimer(), same place ProcessMessageQueue() is called
-void SDRunoPlugin_TXLinkForm::DrainFreqQueue()
-{
-	FreqChangeRequest latest;
-	bool hasUpdate = false;
-	{
-		std::lock_guard<std::mutex> lock(m_freqQueueMutex);
-		while (!m_freqQueue.empty())
-		{
-			latest = m_freqQueue.front();
-			m_freqQueue.pop();
-			hasUpdate = true;
-			ProcessFrequencyChanged(latest.freq0, latest.freq1);
-		}
-	}
-	if (hasUpdate)
-	{
-
-	}
-}
-
-// Called only from the Nana thread (e.g. from your existing window-proc hook
-// that already handles WM_UDP_DATA_READY, or from a nana::timer tick).
-void SDRunoPlugin_TXLinkForm::ProcessFrequencyChanged(double freq0, double freq1)
-{
-	// All the logic that used to live in UiHandleEvent's FrequencyChanged case
-	// moves here. It's now safe to touch m_form->... directly because we're
-	// guaranteed to be on the form's own thread.
-
-	static double lastF0 = 0;
-	static double lastF1 = 0;
-	static double OFStxFreq = 0;
-
-	bool bF0changed = (uint32_t)freq0 != (uint32_t)lastF0;
-	if (bF0changed) lastF0 = freq0;
-
-	bool bF1changed = (uint32_t)freq1 != (uint32_t)lastF1;
-	if (bF1changed) lastF1 = freq1;
-
-	if (!bOFSchkbox) OFStxFreq = 0;
-	if (bOFSchkbox && bF1changed) { OFStxFreq = freq1 - freq0; }
-
-	if (!bF0changed && !bF1changed) return;
-
-	if (freq0 != 0 && freq0 != CurrentRXfreq && SplitMode != SplitFT8)
-	{
-		CurrentRXfreq = freq0;
-		m_parent._updateRX_AnnoEntry("RX", "", (int64_t)CurrentRXfreq);
-	}
-
-	if (SplitMode == SplitNone && bF1changed)
-	{
-		SetVfoFrequencySafe(m_controller, 1, freq0);
-	}
-	else if (SplitMode == SplitNone && bF0changed)
-	{
-		SendSerialMsg("$SendRXfreq$");
-	}
-	else if (SplitMode == SplitFT8)
-	{
-		if (freq0 != CurrentTXfreq)
-		{
-			SetVfoFrequencySafe(m_controller, 0, CurrentTXfreq);
-		}
-	}
-	else
-	{
-		if (freq1 > 0 && SplitMode != SplitFT8)
-		{
-			if (bOFSchkbox) {
-				freq1 = freq0 + OFStxFreq;
-				SetVfoFrequencySafe(m_controller, 1, freq1);
-			}
-			if (freq1 != CurrentTXfreq)
-			{
-				CurrentTXfreq = freq1;
-				SendSerialMsg("$SendTXfreq$");
-			}
-		}
-	}
-}
-
-
-void SDRunoPlugin_TXLinkForm::ProcessIncomingSerial()
-{
-	// called from timer event. Read any data while available, uses {} as begin/end message
-	// also send FT8 event data
-
-	string NextChar = "";
-	string NewMsg = "";
-	string LastMsg = "";
-	static bool VRX0mute = false;
-	static bool VRX1mute = true;
-
-	auto startTime = std::chrono::steady_clock::now();
-	const auto maxDuration = std::chrono::milliseconds(20);  // tune as needed
-	const size_t MAX_MSG_LEN = 64;   // generous given your ~30-byte normal messages
-
-	while (Serial.DataAvailable() > 0)
-	{
-		if (std::chrono::steady_clock::now() - startTime > maxDuration)
-		{
-			string str = "\r\n" + get_millis() + " ProcessIncomingSerial: time budget exceeded, "
-				+ "defer to next tick. LastMsg = \"" + LastMsg + "\"";
-			if (NewMsg != "") str += ", NewMsg = \"" + NewMsg + "\"";
-			str += "\r\n\r\n";
-			std::cout << str;		//this helps avoid splitting line in console
-			break;
-		}
-
-		NextChar = Serial.ReadSerialPortChar();
-		//valid read
-		if (NextChar == "{")
-		{
-			NewMsg = "";
-			LastMsg = "";
-		}
-		else if (NextChar == "}")
-		{
-			//execute compiled message
-			if (NewMsg == "")					//null command or an error
-			{
-				//do nothing for now
-			}
-			else if (NewMsg == "~TX")					//init message from TXlink Arduino
-			{
-				//so send all the initial data to TXlink Arduino
-				if (Serial.Connected()) {
-					//force a freq update here as it can be 20-30seconds after DLL load before TXlink Arduino resets and sends ~TX
-					string str = "{F" + std::to_string((int64_t)CurrentTXfreq) + "}";
-					std::cout << get_millis() << " SDRunoPlugin_TXLinkForm::ProcessIncomingSerial() - Arduino ~TX received - init TXfreq = " << str << std::endl;
-					Serial.WriteSerialPort(str);
-					RTTYmsgOutQ.push(str);
-					//TODO send to RTTYpipe
-				}
-				SendFreqCalToTX();
-				SendTXlevel(TXlevelTb.caption());
-				SendPAlevel(PAlevelTb.caption());
-				SendPAstate(false);					//always start with ext PA off for safety
-				SendFanHold(GetValidFanHold());
-				SendFanLowPWM(GetValidFanLowPWM());
-				SendFT8txDelay(GetValidFT8txDelay());
-				SendTempLimit(GetValidTempLimit());
-				SetMuteTX(true);					//enable vrx1 mute as default
-
-			}
-			else if (NewMsg.substr(0, 1) == "M" && DigiTXmodeStr != "TTY")
-			{
-				VRX0mute = m_controller.GetAudioMute(0);
-				VRX1mute = m_controller.GetAudioMute(1);
-				if (!DiagnosticTX) {
-					m_controller.SetAudioMute(0, true);
-					m_controller.SetAudioMute(1, true);
-				}
-				DiagnosticTX = false;
-			}
-			else if (NewMsg.substr(0, 1) == "N")
-			{
-				m_controller.SetAudioMute(0, VRX0mute);
-				m_controller.SetAudioMute(1, VRX1mute);
-			}
-			else if (NewMsg.substr(0, 1) == "F")
-			{
-				auto __t0 = std::chrono::steady_clock::now();
-				SWRFWDtxt.caption(NewMsg.substr(1));
-				auto __ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-					std::chrono::steady_clock::now() - __t0).count();
-				if (__ms > 10) {
-					std::cout << get_millis() << " SWRFWDtxt.caption() took " << __ms << "ms" << std::endl;
-				}
-			}
-			else if (NewMsg.substr(0, 1) == "R")
-			{
-				auto __t0 = std::chrono::steady_clock::now();
-				SWRREFtxt.caption(NewMsg.substr(1));
-				auto __ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-					std::chrono::steady_clock::now() - __t0).count();
-				if (__ms > 10) {
-					std::cout << get_millis() << " SWRREFtxt.caption() took " << __ms << "ms" << std::endl;
-				}
-
-			}
-			else if (NewMsg.substr(0, 1) == "S")
-			{
-				auto __t0 = std::chrono::steady_clock::now();
-				SWRSWRtxt.caption(NewMsg.substr(1));
-				auto __ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-					std::chrono::steady_clock::now() - __t0).count();
-				if (__ms > 10) {
-					std::cout << get_millis() << " SWRSWRtxt.caption() took " << __ms << "ms" << std::endl;
-				}
-
-			}
-			else if (NewMsg.substr(0, 1) == "T")
-			{
-				auto __t0 = std::chrono::steady_clock::now();
-				SetTXtemp(NewMsg.substr(1));
-				TXtempLbl.caption(NewMsg.substr(1) + " degC");
-				auto __ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-					std::chrono::steady_clock::now() - __t0).count();
-				if (__ms > 10) {
-					std::cout << get_millis() << " SetTXtemp.caption() took " << __ms << "ms" << std::endl;
-				}
-
-			}
-			else if (NewMsg.substr(0, 1) == "D")				//force TX off due to TXtempLimit exceeded
-			{
-				StandbyBtn.caption("Set TX on");
-				StandbyMode = true;
-				TXtempLbl.fgcolor(nana::colors::red);
-			}
-			LastMsg = NewMsg;
-			NewMsg = "";		//message completed
-		}
-		else
-		{
-			NewMsg.append(NextChar);
-			if (NewMsg.length() > MAX_MSG_LEN)
-			{
-				std::cout << std::endl << get_millis() << " ProcessIncomingSerial: message exceeded max length, discarding (possible noise/desync): \""
-					<< NewMsg.substr(0, 20) << "...\"" << std::endl << std::endl;
-				NewMsg = "";
-			}
-		}
-		NextChar = "";
-	}
-}
-
-std::string SDRunoPlugin_TXLinkForm::ProcessRTTYcommand(std::string rttyCmdText)
-{
-	// Process command message string from RTTY server.
-	// eg {M1}{Zrtty message to transmit}{X1}
-	// use the {Mx} to set mode, {Z} to set message, {X1} to start TX, {X0} to stop TX
-
-	if (rttyCmdText.rfind("{M1}", 0) >= 0) {				//set DigiTXmodeStr and UI mode Lbl to RTTY
-		DigiTXmodeStr = "TTY";							//only space for 3 chars in Lbl
-		FT8Lbl.format(true);
-		FT8Lbl.caption("<bold=true size=10>" + DigiTXmodeStr + "</>");    // FT8Lbl.caption(WSJTX_TXmodeStr);		//FT8Lbl.caption(< bold size = 12>" + "FT8" + " < / > ");
-		FT8txOnLbl.bgcolor(nana::colors::red);
-	}
-
-	return rttyCmdText;
-}
-
-
-void SDRunoPlugin_TXLinkForm::ProcessUDPEvent()
-{													//called from Form timer event to process wsjtx UDP	
-	//WSJT_X FT8 UDP request?
-
-	// Process EVERY queued event, in order - NOT coalesced to just the latest.
-	// Some fields here are one-shot/edge-triggered (newDXcall, haltTXevent,
-	// txModeChanged) rather than persistent state, so collapsing a burst down
-	// to "just the last one" can silently drop a real occurrence (e.g. a new
-	// DX call) if a later, unrelated event arrives in the same drain cycle.
-	// WSJT-X's UDP packet rate is naturally low, so processing every event
-	// individually here is fine - unlike the frequency/tuner queues, which
-	// deliberately DO coalesce because those really are "only the latest
-	// value matters" updates.
-	UDPStatusEvent evt;
-	while (UDPStatusQueue.try_pop(evt))
-	{
-		m_lastUDPStatus = evt;		// Form-owned copy, safe for button handlers/millisToEnd to read anytime afterward
-		if (evt.txModeChanged) { m_txModeChangePending = true; }
-
-		//following logic to handle correct mode restore on startup
-		static bool FirstTime = true;				//first time in this function so maybe ignore wsjtx for now?
-		if (FirstTime && SplitMode != SplitFT8)     //only reset datamode when SplitModeFT8 has been restored on startup
-		{
-			if (evt.newFrequency > 0) { FirstTime = false; }			//wait until wsjtx first changes freq to set data mode if datamode was not restored on startup
-			continue;		// skip this event, but keep processing any further queued events
-		}
-
-		FirstTime = false;		//setup data mode on first UDP event only when SplitFT8 restored in data mode
-
-		bool is_sent = false;
-		long TXtimeToEnd = 0;
-		if (Serial.Connected())
-		{
-			//always update freq when changed in wsjtx
-			if (evt.newFrequency > 0)			//user changed band / mode in wsjtx
-			{
-				CurrentWSJTXfreq = static_cast<double>(evt.newFrequency);					//local form master setting
-				SetupDataMode();
-			}
-
-			std::string str = "{X0}";
-			std::string strW = "";			//for W message to set time to end of TX
-			if (evt.dataChanged)
-			{
-				//refresh TX data - this will usually be after wsjtx decodes but before next TX start period
-				str = "{M8}";
-				if (evt.txModeStr == "FT4") { str = "{M4}"; }
-				if (evt.txModeStr == "FT2") { str = "{M2}"; }
-
-				str = str + "{Y" + to_string(evt.txDF) + "}";
-
-				str = str + "{Z" + evt.txSymbols + "}";
-				is_sent = Serial.WriteSerialPort(str);
-			}
-
-			str = "{X0}";
-			strW = "";
-			if (evt.txFlag) {
-				//this UDP datagram is sent immediately at start of tx period
-				if (evt.decodeMsg != "TUNE")
-				{
-					TXtimeToEnd = millisToEnd();
-				}
-				else
-				{
-					TXtimeToEnd = 30000;		//TUNE for 30 seconds from now
-				}
-				strW = "{W" + to_string(TXtimeToEnd) + "}";
-
-				// TX key on message
-				str = "{X1}";							//if (TXtimeToEnd >= 12000) { str = "{X1}"; }		//only enable if enough time left
-			}
-			//indicate FT8 tx on UI form
-			if (str == "{X0}")
-			{
-				FT8txOnLbl.bgcolor(nana::colors::light_grey);
-			}
-			else           //FT8 TX
-			{
-				DigiTXmodeStr = evt.txModeStr;		//save current TX mode
-				FT8Lbl.format(true);
-				FT8Lbl.caption("<bold=true size=10>" + DigiTXmodeStr + "</>");
-				FT8txOnLbl.bgcolor(nana::colors::red);
-
-				SetupDataMode();
-			}
-
-			if (evt.haltTXevent) {
-				TXtimeToEnd = 0;
-				strW = "{X0}";
-				str = "{W0}";					//force TX to stop (needs this command order)
-			}
-
-			//send TX last so freq & message updated first in Arduino
-			is_sent = true;
-			if (SplitMode == SplitFT8 && (DigiTXmodeStr == "FT2" || DigiTXmodeStr == "FT4" || DigiTXmodeStr == "FT8"))
-			{
-				str = strW + str;
-				is_sent = Serial.WriteSerialPort(str); //Arduino setup commands will now send in earlier status UDP
-				// then Wn & X1 will be sent here
-			}
-
-		}
-		ShowIsSent(is_sent);
-		FT8msgLbl.caption(evt.decodeMsg + " - " + to_string(TXtimeToEnd));
-
-	}	// end while - next queued event, if any
-}
-
-void SDRunoPlugin_TXLinkForm::ReTransmit() {
-	//diagnostic only
-
-	uint64_t Ms = GetCurrentTimeMs();
-	int slotPeriod = m_lastUDPStatus.txModeStr == "FT2" ? 3750 : (m_lastUDPStatus.txModeStr == "FT4" ? 7500 : 15000);
-	Ms = Ms % slotPeriod;
-	while (Ms > 10)
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(5));
-		Ms = GetCurrentTimeMs() % slotPeriod;
-	}
-
-	long TimeToEnd = millisToEnd();
-	std::string str = "{W" + to_string(TimeToEnd) + "}{X1}";
-	Serial.WriteSerialPort(str);
-	DiagnosticTX = true;				//controls mute
-}
-
-void SDRunoPlugin_TXLinkForm::SetupDataMode()
-{
-	freqTb.bgcolor(nana::colors::light_salmon);
-	FT8Lbl.fgcolor(nana::colors::black);
-	FT8Lbl.bgcolor(nana::colors::light_salmon);
-	FT8Lbl.transparent(false);
-	{
-		std::lock_guard<std::mutex> lock(g_splitModeMutex);
-		SplitMode = SplitFT8;
-	}
-	// and set FT8 RX in vrx0 & vrx1
-	if (CurrentTXfreq != CurrentWSJTXfreq)				//make sure freq is set
-	{
-		CurrentTXfreq = CurrentWSJTXfreq;
-		SetRXFreq();									//sets both vfos to CurrentTXfreq
-		SendTXfreq();									//update TX hardware
-	}
-	CurrentRXfreq = CurrentTXfreq + m_lastUDPStatus.txDF;
-
-	double f0 = GetVfoFrequencySafe(m_controller, 0);
-	double f1 = GetVfoFrequencySafe(m_controller, 1);
-	if (CurrentTXfreq != f0) SetVfoFrequencySafe(m_controller, 0, CurrentTXfreq);
-	if (CurrentRXfreq != f1) SetVfoFrequencySafe(m_controller, 1, CurrentRXfreq);
-
-	m_parent._updateTX_AnnoEntry("FT8Base", "", (int64_t)CurrentTXfreq);
-	m_parent._updateRX_AnnoEntry("FTX", "", (int64_t)CurrentRXfreq);
-	m_controller.SetDemodulatorType(0, m_controller.DemodulatorUSB);
-	FixFreqBtn.caption("UnSplit");
-	if (m_txModeChangePending)
-	{
-		int bndw = FilterBandwidthFT8;
-		if (DigiTXmodeStr == "FT4") { bndw = FilterBandwidthFT4; }
-		if (DigiTXmodeStr == "FT2") { bndw = FilterBandwidthFT2; }
-		m_controller.SetFilterBandwidth(0, bndw);
-		m_txModeChangePending = false;
-	}
-}
-
-void SDRunoPlugin_TXLinkForm::QueueTunerFreqChange(int32_t freqIncr)
-{
-	std::lock_guard<std::mutex> lock(m_tunerQueueMutex);
-	m_tunerQueue.push({ freqIncr });
-}
-
-void SDRunoPlugin_TXLinkForm::DrainTunerQueue()
-{
-	std::queue<TunerFreqRequest> local;
-	{
-		std::lock_guard<std::mutex> lock(m_tunerQueueMutex);
-		std::swap(local, m_tunerQueue);
-	}
-	while (!local.empty())
-	{
-		ProcessTunerFreqChange(local.front().freqIncr);
-		local.pop();
-	}
-}
-
-void SDRunoPlugin_TXLinkForm::ProcessTunerFreqChange(int32_t freqIncr)
-{
-	// Moved from TunerServer.cpp's "if (FreqIncr != 0)" block - now safe,
-	// runs only on the Form thread.
-
-	if (SplitMode == SplitNone)
-	{
-		long Freq = GetVfoFrequencySafe(m_controller, 0);
-		SetVfoFrequencySafe(m_controller, 0, Freq + freqIncr);
-	}
-	else if (SplitMode == SplitTxRx)
-	{
-		if (bRITchkbox)
-		{
-			long Freq = GetVfoFrequencySafe(m_controller, 0);
-			SetVfoFrequencySafe(m_controller, 0, Freq + freqIncr);
-		}
-		else
-		{
-			long Freq = GetVfoFrequencySafe(m_controller, 1);
-			SetVfoFrequencySafe(m_controller, 1, Freq + freqIncr);
-		}
-	}
-}
 
 bool SDRunoPlugin_TXLinkForm::bLastTenCalls(string DXcall)
 {
@@ -1311,84 +239,7 @@ bool SDRunoPlugin_TXLinkForm::bLastTenCalls(string DXcall)
 	return false;		// return ret;
 }
 
-void SDRunoPlugin_TXLinkForm::SendRXfreq()
-{
 
-	if (TrackFreq || freqTb.caption() == "")
-	{
-		//update TX freq fron VRX0 freq change
-		double tmp = GetVfoFrequencySafe(m_controller, 0);
-		if (tmp > 0)
-		{
-			CurrentTXfreq = tmp;
-			CurrentRXfreq = tmp;
-		}
-	}
-	TRY_STEP("SendRXfreq-SendTXfreq", SendTXfreq());
-}
-
-std::mutex mtx2;
-void SDRunoPlugin_TXLinkForm::SendTXfreq()
-{
-	// called from timer event msg queue, sends current TX freq to TXlink Arduino
-	bool is_sent = false;
-	string strTXfreq = "";
-	std::lock_guard<std::mutex> lock(mtx2);
-
-	// following needed to avoid sending same freq multiple times
-	// by the time it gets here the freq may have stabalised in tuner thread, so only send if different.
-	static double LastTXfreq = -1.0;		//static so only set once per call
-	if (CurrentTXfreq == LastTXfreq) { return; }		//no change so skip sending
-	LastTXfreq = CurrentTXfreq;				//set last TX freq to current
-
-	strTXfreq = std::to_string((int64_t)CurrentTXfreq);
-
-	// send current TX freq to TX
-	if (!Serial.Connected())
-	{
-		//attempt to restart COM port
-		string strCOM = COMportTb.caption();
-		strCOM = COMportPrefix + strCOM;
-		Serial.ReOpenPort(strCOM, COM_BAUD_RATE, false);
-		std::this_thread::sleep_for(std::chrono::milliseconds(250));		//wait for Arduino to restart
-	}
-	if (Serial.Connected()) {
-
-		std::string str = "{F" + strTXfreq + "}";
-		is_sent = Serial.WriteSerialPort(str);
-		RTTYmsgOutQ.push(str);
-		std::cout << str << std::endl;
-	}
-
-	ShowIsSent(is_sent);				//animate form button to show if sent ok
-
-	//update Plugin label to show TXfreq
-	//add dots to show 1000's in Plugin label
-	for (int i = strTXfreq.length(); i > 3; i = i - 3)
-	{
-		strTXfreq = strTXfreq.substr(0, i - 3) + "." + strTXfreq.substr(i - 3);
-	}
-	//freqTb.format(true);
-	//freqTb.caption("<bold size=12>" + strTXfreq + "</>");				//TXfreq + "< bold size = 14 color = 0x000000 font = \"Verdana\"></>");
-	//freqTb.caption(strTXfreq);
-
-	if (SplitMode != SplitFT8)
-	{
-		m_parent._updateTX_AnnoEntry("TX", "", (int64_t)CurrentTXfreq);
-		m_parent._updateRX_AnnoEntry("RX", "", (int64_t)CurrentRXfreq);
-	}
-	else
-	{
-		m_parent._updateTX_AnnoEntry("FT8base", "", (int64_t)CurrentTXfreq);
-		m_parent._updateRX_AnnoEntry("FTX", "", (int64_t)CurrentRXfreq);
-	}
-
-	double vtxFreq = GetVfoFrequencySafe(m_controller, 1);
-	if (vtxFreq != CurrentTXfreq && vtxFreq > 0 && SplitMode != SplitFT8)
-	{
-		SetVfoFrequencySafe(m_controller, 1, CurrentTXfreq);					// force vrx1 to track TX freq
-	}
-}
 
 
 
@@ -1611,13 +462,6 @@ double SDRunoPlugin_TXLinkForm::strToDouble(string str)
 	return d;
 }
 
-void SDRunoPlugin_TXLinkForm::CloseCOMPort()
-{
-	std::cout << get_millis() << "Request Close TxLink COM port" << std::endl;
-	Serial.CloseSerialPort();
-	std::cout << get_millis() << "TxLink COM port closed" << std::endl;
-}
-
 void SDRunoPlugin_TXLinkForm::FixFreqBtnClicked()
 {
 	// sets split mode back to normal from FT8 and toggles normal Split
@@ -1686,89 +530,6 @@ void SDRunoPlugin_TXLinkForm::AtuDialog_Closed()
 	//TODO: Extra code goes here to be preformed when settings dialog form closes
 }
 
-void SDRunoPlugin_TXLinkForm::DXspotBtnClicked()
-{
-	// Derive a DXspot message and send to DXspider
-	// spot message format: "DX <frequency> <dx_call> <notes>"
-	std::cout << get_millis() << "DXspotBtnClicked: Request DXspot" << std::endl;
-
-	std::string strDXspot = "";
-	if (CurrentWSJTXfreq > 0)
-	{
-		strDXspot += "dx " + std::to_string((int64_t)CurrentWSJTXfreq / 1000) + ".0";
-	}
-	else
-	{
-		std::cout << get_millis() << "DXspotBtnClicked: No TXfreq" << "\n";
-		return;
-	}
-
-	if (m_lastUDPStatus.dxCall != "")
-	{
-		strDXspot += " " + m_lastUDPStatus.dxCall;
-
-		//remove "<" and ">" from DXcall
-		char charToRemove = '<';
-		strDXspot.erase(std::remove(strDXspot.begin(), strDXspot.end(), charToRemove), strDXspot.end());
-		charToRemove = '>';
-		strDXspot.erase(std::remove(strDXspot.begin(), strDXspot.end(), charToRemove), strDXspot.end());
-	}
-	else
-	{
-		std::cout << get_millis() << "DXspotBtnClicked: No DXcall" << std::endl;
-		return;
-	}
-
-	if (DigiTXmodeStr != "")
-	{
-		strDXspot += " " + DigiTXmodeStr;
-	}
-	else
-	{
-		std::cout << get_millis() << "DXspotBtnClicked: No DigiTXmodeStr" << "\n";
-		return;
-	}
-
-	if (m_lastUDPStatus.report != "")
-	{
-		strDXspot += " " + m_lastUDPStatus.report + "dB";
-	}
-	else
-	{
-		std::cout << get_millis() << "DXspotBtnClicked: No Report" << "\n";
-		//return;
-	}
-
-	if (m_lastUDPStatus.rxDF != 0)
-	{
-		strDXspot += " " + std::to_string(m_lastUDPStatus.rxDF) + "Hz";
-	}
-	else
-	{
-		std::cout << get_millis() << "DXspotBtnClicked: No RxDF" << "\n";
-		return;
-	}
-
-	if (m_lastUDPStatus.dxGrid != "")
-	{
-		strDXspot += " Loc: " + m_lastUDPStatus.dxGrid;
-	}
-	else
-	{
-		std::cout << get_millis() << "DXspotBtnClicked: No DXgrid" << "\n";
-	}
-
-	strDXspot += " 73GL";
-
-	std::cout << get_millis() << "DXspotBtnClicked: DXspot created: " << strDXspot << "\n";
-	//DXspiderSpot("G4AHN-2", strDXspot);
-
-	DXspot_t spot;
-	spot.dxSpiderPort = GetSetConfigurationKey("TXLink.dxSpiderPort", "dxspider.co.uk:7300");			//"dxspider.co.uk:7300";
-	spot.myCall = GetSetConfigurationKey("TXLink.myDXspotCall", "G4AHN-1");			//
-	spot.DXspot = strDXspot;
-	DXspiderSpotOutQ.push(spot);			//put spot on DXspider queue to send
-}
 
 
 //get setting from ini file and create a default if not already set
@@ -2030,24 +791,6 @@ string SDRunoPlugin_TXLinkForm::GetValidTempLimit()
 	return tmp;
 }
 
-void SDRunoPlugin_TXLinkForm::SetRXFreq()
-{
-	SetVfoFrequencySafe(m_controller, 0, CurrentTXfreq);
-	SetVfoFrequencySafe(m_controller, 1, CurrentTXfreq);
-}
-
-void SDRunoPlugin_TXLinkForm::SwapTxRxFreq()
-{
-	if (SplitMode == SplitTxRx)
-	{
-		//swap TX and RX freqs
-		double VFO0 = GetVfoFrequencySafe(m_controller, 0);
-		double VFO1 = GetVfoFrequencySafe(m_controller, 1);
-		SetVfoFrequencySafe(m_controller, 0, VFO1);
-		SetVfoFrequencySafe(m_controller, 1, VFO0);
-	}
-}
-
 bool SDRunoPlugin_TXLinkForm::GetRITchkbox()
 {
 	return RITchkbox.checked();
@@ -2071,8 +814,6 @@ void SDRunoPlugin_TXLinkForm::SettingsButton_Click()
 
 	//Show the setttings dialog
 	settingsDialog.Run();
-
-
 }
 
 void SDRunoPlugin_TXLinkForm::SettingsDialog_Closed()
@@ -2092,28 +833,6 @@ void SDRunoPlugin_TXLinkForm::SettingsDialog_Closed()
 	RTCdelay = RTCcurrentDelay - RTCdelayOffset;
 	RTCdelay < 50 ? RTCdelay = 50 : RTCdelay;
 	SendTempLimit(GetValidTempLimit());
-}
-
-
-long SDRunoPlugin_TXLinkForm::millisToEnd() {
-
-	//calc millis to end of this period relative to world UTC
-	long millisToEnd = (15000 - (GetCurrentTimeMs() + RTCdelay) % 15000 - 150);								//FT8 15sec slot
-	if (m_lastUDPStatus.txModeStr == "FT4") { millisToEnd = (7500 - (GetCurrentTimeMs() + RTCdelay) % 7500 - 50); }   //7.5sec slot
-	if (m_lastUDPStatus.txModeStr == "FT2") { millisToEnd = (3750 - (GetCurrentTimeMs() + RTCdelay) % 3750); }		//3.75sec slot
-
-	return millisToEnd;
-}
-
-// used in ATU tune dialog to change settings
-bool SDRunoPlugin_TXLinkForm::_SendSerialMsg(string Msg)
-{
-	bool is_sent = false;
-	if (Serial.Connected())
-	{
-		is_sent = Serial.WriteSerialPort(Msg);
-	}
-	return is_sent;
 }
 
 
@@ -2152,24 +871,6 @@ void SDRunoPlugin_TXLinkForm::SaveLocation()
 		m_controller.SetConfigurationKey("TXLink.Y", std::to_string(position.y));
 	}
 
-}
-
-//Load COM port
-string SDRunoPlugin_TXLinkForm::LoadCOM()
-{
-	std::string tmp = "COM5";
-	m_controller.GetConfigurationKey("TXLink.COM", tmp);
-
-	if (tmp.empty())
-	{
-		return "";
-	}
-	return tmp;
-}
-
-void SDRunoPlugin_TXLinkForm::SaveCOM(string strCOM)
-{
-	m_controller.SetConfigurationKey("TXLink.COM", strCOM);
 }
 
 //Load TXlevel
@@ -2304,14 +1005,6 @@ void SDRunoPlugin_TXLinkForm::FixFreqButtonClicked()
 	{
 		SendRXfreq();
 	}
-}
-
-bool SDRunoPlugin_TXLinkForm::SendSerialMsg(const std::string& msg)
-{
-	// Lock the mutex to safely push the message
-	std::lock_guard<std::mutex> lock(m_queueMutex);
-	m_messageQueue.push(msg);
-	return true;
 }
 
 void SDRunoPlugin_TXLinkForm::SaveIniData()

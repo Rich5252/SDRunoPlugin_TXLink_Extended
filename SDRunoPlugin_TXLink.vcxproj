@@ -141,6 +141,11 @@
     <ClCompile Include="SDRunoPlugin_TXLink.cpp" />
     <ClCompile Include="SDRunoPlugin_TXLinkATUDialog.cpp" />
     <ClCompile Include="SDRunoPlugin_TXLinkForm.cpp" />
+    <ClCompile Include="SDRunoPlugin_TXLinkFormDXspot.cpp" />
+    <ClCompile Include="SDRunoPlugin_TXLinkFormFreqCtrl.cpp" />
+    <ClCompile Include="SDRunoPlugin_TXLinkFormSerial.cpp" />
+    <ClCompile Include="SDRunoPlugin_TXLinkFormSetUp.cpp" />
+    <ClCompile Include="SDRunoPlugin_TXLinkFormUDP.cpp" />
     <ClCompile Include="SDRunoPlugin_TXLinkProject.cpp" />
     <ClCompile Include="SDRunoPlugin_TXLinkSettingsDialog.cpp" />
     <ClCompile Include="SDRunoPlugin_TXLinkUi.cpp" />
