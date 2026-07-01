@@ -272,7 +272,7 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
             //diagnostic output
             uint64_t ms = GetCurrentTimeMs();
             int slotPeriod = WSJTX_TXmodeStr == "FT2" ? 3750 : (WSJTX_TXmodeStr == "FT4" ? 7500 : 15000);
-            string str1 = get_millis() + "UDP packet : " + strPacketType + " " + FormatUtcTime(ms) + " DTC: " + to_string(ms % slotPeriod) + "\r\n";
+            string str1 = get_millis() + "UDP packet done: " + strPacketType + " " + FormatUtcTime(ms) + " DT: " + to_string(ms % slotPeriod) + "\r\n";
             std::cout << str1;
 
         }
@@ -302,7 +302,7 @@ void PreemptiveTXCheck()
     {                                   //expeimental - tx early cf PC RTC since PC clock delayed for SDR etc
         PreemptiveTXstartMs = GetCurrentTimeMs();
         string str1 = (TXeven ? " TX even. " : " TX odd. ");
-        string str2 = "\r\n" + get_millis() + "Preemptive TX: " + FormatUtcTime(PreemptiveTXstartMs) + " Slot: " + to_string(SlotNumber) + " DTC: " + to_string(PreemptiveTXstartMs % slotPeriod) + str1 + "RTCdelay: " + to_string(RTCdelay) + "\r\n";
+        string str2 = "\r\n" + get_millis() + "Preemptive TX: " + FormatUtcTime(PreemptiveTXstartMs) + " Slot: " + to_string(SlotNumber) + " DT: " + to_string(PreemptiveTXstartMs % slotPeriod) + str1 + "RTCdelay: " + to_string(RTCdelay) + "\r\n";
         std::cout << str2;
         TXpreempted = true;      //indicates when Preempted TX has started. Reset when next packet received (checking correct slot)
         TXpreemptedStartSlot = SlotNumber;
@@ -333,8 +333,6 @@ std::string ProcessPacket(char* message, int message_len)
         // emit UI update signal for heartbeat if needed
     }
     else if (NewPacket.PacketType == 1) {
-        std::string ret = "Status";
-
         //status packet contains next ft8 message and TX on/off updates
         WSJTX_Status StatusPacket(pkt, NewPacket.index);
         StatusPacket.Decode();
@@ -344,7 +342,7 @@ std::string ProcessPacket(char* message, int message_len)
         std::string msg = StatusPacket.DefaultTXMessage;
         msg = removeTrailingSpaces(msg);
 
-        std::cout << "\n" << get_millis() << "NewStatuspacket: DefaultTXMessage = " << '"' << StatusPacket.DefaultTXMessage << '"' << std::endl;
+        std::cout << "\n" << get_millis() << "NewStatusPacket: DefaultTXMessage = " << '"' << StatusPacket.DefaultTXMessage << '"' << std::endl;
 
         if (msg == "") { msg = "CQ G4AHN IO91"; }                           //default message if empty
 
@@ -378,10 +376,7 @@ std::string ProcessPacket(char* message, int message_len)
             dataChanged = true;
             msgChanged = true;
         }
-        else
-        {
-            ret = ret + ": Msg unchanged: " + msg;
-        }
+
         LastTXmsg = msg;                                                                        //store last message sent
         TXsymbolsLocal = txSymbols;
         TXflgLocal = txFlag;
@@ -398,6 +393,9 @@ std::string ProcessPacket(char* message, int message_len)
         int slotPeriod = WSJTX_TXmodeStr == "FT2" ? 3750 : (WSJTX_TXmodeStr == "FT4" ? 7500 : 15000);
         int nSlot = (ms % 60000) / slotPeriod;
 		bool IsSlotEven = ((ms / slotPeriod) % 2) == 0;
+        int DTC = ms % slotPeriod;
+        int SlotTimeLeft = slotPeriod - DTC;
+
         TXenabled = StatusPacket.TxEnabled;
         if (TXenabled)
         {
@@ -405,14 +403,13 @@ std::string ProcessPacket(char* message, int message_len)
 			//We are looking for a packet early in TXslot that would normally be a TX packet but says "not transmitting" - this is a preemptive TX abort
             // Latest WSJTX has an FT2 end tx packet very close to end of slot which comes after a valid PreemptTX so ignore this.
 
-            int DTC = ms % slotPeriod;
             if (TXpreempted &&  nSlot != TXpreemptedStartSlot && (ms - PreemptiveTXstartMs) < 1000 && !StatusPacket.Transmitting && TXeven == IsSlotEven)
                 // We are in the slot following preemptive TX but wsjtx says not TX so must mean slot was wrong
                  // so do a halt TX
             {
                 haltTXevent = true;
                 TXpreempted = false;
-                string str1 = get_millis() + "Preemptive TX Halt. DTC: " + to_string(DTC) + "  trPeriod = " + to_string(StatusPacket.trPeriod) + "\r\n";
+                string str1 = get_millis() + "Preemptive TX Halt. DT: " + to_string(DTC) + "  trPeriod = " + to_string(StatusPacket.trPeriod) + "\r\n";
                 std::cout << str1;
             }
 
@@ -420,17 +417,19 @@ std::string ProcessPacket(char* message, int message_len)
 			// More difficult if TXenabled and not Transmitting because normally a packet is received towards end of TX slot to stop TX.
             
             bool even = (ms / slotPeriod) % 2 == 0;
-            int SlotTimeLeft = slotPeriod - DTC;
             if (StatusPacket.Transmitting)   TXeven = even;              //can only be certain when wsjtx is tx'ing
             if (nSlot != TXpreemptedStartSlot && !msgChanged && !StatusPacket.Transmitting && TXenabled && SlotTimeLeft > 3000) TXeven = !even;
-            string str1 = dataChanged ? " Data changed. " : " Data unchanged. ";
-            string str2 = msgChanged ? " Message changed. " : " Message unchanged. ";
-            string str3 = TXeven ? " TXslot Even " : " TXslot Odd ";
-            string str4 = StatusPacket.Transmitting ? " Transmitting. " : " Not transmitting. ";
-            string str5 = TXenabled ? " TXenabled. " : " TXdisabled. ";
-            std::cout << get_millis() << str1 << str2 << str5 << str3 << str4 << " Slot: " << nSlot << " SlotTimeLeft: " << SlotTimeLeft << std::endl;
         }
         if (StatusPacket.Transmitting)  TXpreempted = false;            //reset preemptive flag when actual TX starts
+
+        string str0 = "UDPPush: ";
+        string str1 = dataChanged ? "Data change. " : "Data nochange. ";
+        string str2 = msgChanged ? "Msg change. " : "Msg unchanged. ";
+        string str3 = TXeven ? "TXslot Even " : "TXslot Odd ";
+        string str4 = StatusPacket.Transmitting ? "TX On. " : "TX off. ";
+        string str5 = TXenabled ? " TXenabled. " : " TXdisabled. ";
+        std::cout << get_millis() << str0 << str1 << str2 << str5 << str3 << str4 << "Slot: " << nSlot << " SlotTimeLeft: " << SlotTimeLeft << std::endl;
+
 
         // Populate and push the complete event - single source of truth for
         // this packet, consumed as one atomic unit by the Form thread.
@@ -493,7 +492,7 @@ std::string ProcessPacket(char* message, int message_len)
                 }).detach();
         }
 
-        return ret;
+        return "Status Update Pushed to Form. ";
     }
     else if (NewPacket.PacketType == 2) {
         WSJTX_Decode DecodePacket(pkt, NewPacket.index);
