@@ -425,7 +425,7 @@ std::string ProcessPacket(char* message, int message_len)
         string str0 = "UDPPush: ";
         string str1 = dataChanged ? "Data change. " : "Data nochange. ";
         string str2 = msgChanged ? "Msg change. " : "Msg unchanged. ";
-        string str3 = TXeven ? "TXslot Even " : "TXslot Odd ";
+        string str3 = TXeven ? "TXslot Even. " : "TXslot Odd ";
         string str4 = StatusPacket.Transmitting ? "TX On. " : "TX off. ";
         string str5 = TXenabled ? " TXenabled. " : " TXdisabled. ";
         std::cout << get_millis() << str0 << str1 << str2 << str5 << str3 << str4 << "Slot: " << nSlot << " SlotTimeLeft: " << SlotTimeLeft << std::endl;
