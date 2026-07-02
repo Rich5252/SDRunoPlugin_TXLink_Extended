@@ -1,22 +1,13 @@
 #pragma once
 
 #include <thread>
-#include <functional>
 #include <mutex>
 #include <atomic>
-#include <iunoplugincontroller.h>
-#include <iunoplugin.h>
-#include <iunostreamobserver.h>
-#include <iunoaudioobserver.h>
-#include <iunoaudioprocessor.h>
-#include <iunostreamobserver.h>
-#include <iunoannotator.h>
 
-#include "SDRunoPlugin_TXLink.h"
-#include "SDRunoPlugin_TXLinkUi.h"
 #include "SDRunoPlugin_TXLinkForm.h"
-#include "UDP_Server.h"
-#include "RTTY_Server.h"
+#include "SDRunoPlugin_TXLinkUi.h"
+
+
 
 //TXlink plugin for SDRuno app. The plugin code is based on the SDRuno plugin template example.
 // It talks to an Arduino transmitter project via USB serial link.

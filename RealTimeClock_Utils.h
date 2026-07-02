@@ -1,5 +1,4 @@
 #pragma once
-#include <time.h>
 
 void SyncClockFromInternet(const char* ntpServer, int offsetMs);
 

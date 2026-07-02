@@ -3,11 +3,9 @@
 #include <iostream>
 #include <vector>
 #include <string>
-#include <algorithm> // for std::reverse (if needed)
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <iomanip>              // For std::hex, std::setw, std::setfill
-#include <intrin.h>
 #include "UDP_Type17.h"
 
 // Assuming you have access to WSJTX_Packet.h definitions

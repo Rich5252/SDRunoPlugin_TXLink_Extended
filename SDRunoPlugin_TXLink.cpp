@@ -2,13 +2,18 @@
 #include <unoevent.h>
 #include <iunoplugincontroller.h>
 #include <vector>
-#include <sstream>
 #include <chrono>
+#include <iostream>
 
 #include "SDRunoPlugin_TXLink.h"
 #include "SDRunoPlugin_TXLinkUi.h"
 #include "SDRunoPlugin_TXLinkForm.h"
+#include "RTTY_Server.h"
 #include "Heartbeat.h"
+#include "UDP_Server.h"
+#include "TunerServer.h"
+#include "DXspiderClient.h"
+
 
 
 //TXlink plugin for SDRuno app. The plugin code is based on the SDRuno plugin template example.

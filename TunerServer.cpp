@@ -1,9 +1,5 @@
 #include <iostream>
 #include <string>
-#include <vector>
-#include <cstring>
-#include <format>
-#include <tuple>
 #include <chrono>
 #include <thread>
 #include <windows.h>
@@ -12,8 +8,9 @@
 #include "SDRunoPlugin_TXLink.h"
 #include "TunerServer.h"
 #include "SendKeys.h"
-#include "UDP_Server.h"
 #include "SDRUnoHelper.h"
+#include "MessageBox.h"
+
 
 std::atomic<bool> TunerExitRequest(false);
 std::mutex m_lock3;

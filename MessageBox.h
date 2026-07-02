@@ -1,7 +1,5 @@
 #pragma once
-#include <windows.h>
-#include <iostream>
-#include <sstream>
+
 #include <string>
 
 void LogAndDisplayError(const std::string& errorMessage);

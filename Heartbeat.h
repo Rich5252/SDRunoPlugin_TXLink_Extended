@@ -2,10 +2,8 @@
 #pragma once
 #include <atomic>
 #include <chrono>
-#include <thread>
 
 #include "MessageBox.h"     //for get_millis()
-
 
 
 inline std::atomic<int64_t> g_formHeartbeatMs{ 0 };

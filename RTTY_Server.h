@@ -1,11 +1,7 @@
 #pragma once
 
-
-#include <mutex>
 #include <atomic>
 
-#include "MessageBox.h"
-#include <iunoplugincontroller.h>
 #include "MessageQueue.h"
 
 

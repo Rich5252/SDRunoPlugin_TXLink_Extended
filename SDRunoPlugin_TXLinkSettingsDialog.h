@@ -1,21 +1,13 @@
 #pragma once
 
+#include <mutex>
+
 #include <nana/gui.hpp>
-#include <nana/gui/widgets/button.hpp>
-#include <nana/gui/widgets/listbox.hpp>
-#include <nana/gui/widgets/slider.hpp>
 #include <nana/gui/widgets/label.hpp>
-#include <nana/gui/widgets/combox.hpp>
 #include <nana/gui/widgets/textbox.hpp>
 #include <nana/gui/timer.hpp>
-#include <nana/gui/widgets/picture.hpp>
-#include <nana/gui/filebox.hpp>
-#include <nana/gui/dragger.hpp>
-#include <iostream>
-#include <iomanip>
-#include <sstream>
 
-#include <iunoplugincontroller.h>
+#include "SDRunoSDK.h"
 
 
 // TODO: Change these numbers to the height and width of your form

@@ -1,23 +1,15 @@
 #include <sstream>
 #include <nana/gui.hpp>
-#include <nana/gui/widgets/button.hpp>
 #include <nana/gui/widgets/listbox.hpp>
-#include <nana/gui/widgets/slider.hpp>
-#include <nana/gui/widgets/label.hpp>
-#include <nana/gui/timer.hpp>
-#include <nana/gui/detail/bedrock.hpp>
 #include <unoevent.h>
-//#include <processthreadsapi.h>
+#include <iostream>
 
 #include "SDRunoPlugin_TXLink.h"
 #include "SDRunoPlugin_TXLinkUi.h"
 #include "SDRunoPlugin_TXLinkForm.h"
 #include "UDP_Server.h"
-#include "RTTY_Server.h"
 #include "SDRUnoHelper.h"
-//#include "nana_cleanup.h"
-
-
+#include "MessageBox.h"
 
 
 // Ui constructor - load the Ui control into a thread

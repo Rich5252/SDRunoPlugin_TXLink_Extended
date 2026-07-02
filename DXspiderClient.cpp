@@ -1,18 +1,14 @@
 #include <iostream>
 #include <string>
 #include <asio.hpp>
-#include <ctime>
-#include <iomanip>
-#include <optional> // For std::optional
 #include <vector>
 #include <thread>
 #include <chrono>
 #include <atomic>
 
-#include "DXspiderClient.h"
+#include "DXspiderClient.h"         //needed for DXspot_t structure sent from Form to DXspider thread via DXspiderSpotOutQ queue
 #include "MessageBox.h"
 #include "MessageQueue.h"
-
 
 
 using asio::ip::tcp;

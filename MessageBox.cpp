@@ -3,6 +3,9 @@
 #include <sstream>
 #include <string>
 #include "MessageBox.h"
+#include <windows.h>
+#include <iostream>
+#include <sstream>
 
 int SDRthreadCount = 0;
 

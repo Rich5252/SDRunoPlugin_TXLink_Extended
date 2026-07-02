@@ -3,6 +3,8 @@
 #include <Windows.h>
 #endif
 
+#include <iostream>
+
 #include "SDRunoPlugin_TXLinkForm.h"
 #include "RTTY_Server.h"
 #include "DXspiderClient.h"

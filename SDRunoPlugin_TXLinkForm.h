@@ -12,17 +12,10 @@
 #include <queue>
 #include <mutex>
 
-#include <iunoplugincontroller.h>
+#include "SDRunoSDK.h"
 
 #include "SDRunoPlugin_TXLinkATUDialog.h"
-//NOTE ***** DO NOT DELETE THE FOLLOWING INCLUDES
 #include "SimpleSerial.h"
-#include "TunerServer.h"
-#include "DXspiderClient.h"
-#include "MessageBox.h"
-#include "NamedPipeServer.h"
-#include "MessageQueue.h"
-#include "RealTimeClock_Utils.h"
 #include "UDPStatusEvent.h"   // struct UDPStatusEvent only - deliberately NOT UDP_Server.h,
 								// which would create a circular include via SDRunoPlugin_TXLink.h
 

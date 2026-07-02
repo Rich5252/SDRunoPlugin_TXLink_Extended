@@ -2,8 +2,6 @@
 
 #include <mutex>
 #include <iunoplugincontroller.h>
-#include "SimpleSerial.h"
-#include "MessageBox.h"
 #include <atomic>
 
 //This server is started in a separate thread from SDRunoPlugin_TXLink.cpp
@@ -15,3 +13,4 @@ extern std::atomic<bool> TunerExitRequest;				//break out of loop and tidy up on
 extern std::mutex g_splitModeMutex;
 
 LPWSTR ConvertToLPWSTR(const char* charString);
+

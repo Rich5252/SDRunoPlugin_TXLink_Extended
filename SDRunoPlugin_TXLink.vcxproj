@@ -160,13 +160,13 @@
     <ClCompile Include="UDP_Server.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\include\iunoplugincontroller.h" />
     <ClInclude Include="DXspiderClient.h" />
     <ClInclude Include="FindWindowTitleRoot.h" />
     <ClInclude Include="Console.h" />
     <ClInclude Include="Heartbeat.h" />
     <ClInclude Include="RealTimeClock_Utils.h" />
     <ClInclude Include="SDRUnoHelper.h" />
+    <ClInclude Include="SDRunoSDK.h" />
     <ClInclude Include="UDPStatusEvent.h" />
     <ClInclude Include="UDP_Type17.h" />
     <ClInclude Include="MessageQueue.h" />

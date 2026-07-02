@@ -1,4 +1,8 @@
+#include <thread>
+
 #include "Heartbeat.h"
+#include <iostream>
+#include <sstream>
 
 
 void Watchdog_Loop(std::atomic<bool>& exitRequest)

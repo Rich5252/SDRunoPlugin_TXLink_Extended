@@ -2,9 +2,6 @@
 
 #include <windows.h>
 #include <string>
-#include <vector>
-#include <stdexcept>
-#include <algorithm>
 
 // Define the maximum size for the command buffer (matching the VB6 setup)
 #define DEFAULT_BUFSIZE 512

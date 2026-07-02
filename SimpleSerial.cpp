@@ -1,4 +1,7 @@
-//#include "stdafx.h"
+#include <iostream>
+#include <fstream>
+#include <stdio.h>
+
 #include "SimpleSerial.h"
 #include "MessageBox.h"
 #include "RealTimeClock_Utils.h"

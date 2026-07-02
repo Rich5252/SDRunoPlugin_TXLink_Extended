@@ -3,11 +3,11 @@
 #include "SDRunoPlugin_TXLinkForm.h"
 #include "SDRunoPlugin_TXLinkUi.h"
 #include "UDP_Server.h"
-#include "DXspiderClient.h"
 #include "SDRUnoHelper.h"
+#include "TunerServer.h"
+#include "RealTimeClock_Utils.h"
 
 #include <nana/gui.hpp>
-#include <nana/gui/widgets/listbox.hpp>
 #include <nana/gui/widgets/label.hpp>
 #include <nana/gui/programming_interface.hpp> // Often where 'main_thread_dispatch' lives
 

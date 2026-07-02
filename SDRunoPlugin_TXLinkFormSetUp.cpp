@@ -4,10 +4,13 @@
 #include <winuser.h>
 #endif
 
+#include <iostream>
+
 #include "SDRunoPlugin_TXLinkForm.h"
 #include "SDRunoPlugin_TXLinkUi.h"
 #include "resource.h"
 #include "FindWindowTitleRoot.h"
+#include "MessageBox.h"
 
 #include <nana/gui.hpp>
 #include <nana/gui/widgets/button.hpp>

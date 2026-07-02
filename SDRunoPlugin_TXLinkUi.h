@@ -1,4 +1,5 @@
 #pragma once
+
 namespace nana {
 	namespace detail {
 		class bedrock;
@@ -6,22 +7,12 @@ namespace nana {
 }
 nana::detail::bedrock& get_bedrock_instance();
 
-#include <nana/gui.hpp>
-#include <nana/gui/widgets/button.hpp>
-#include <nana/gui/widgets/label.hpp>
-#include <nana/gui/timer.hpp>
-
-#include <iunoplugin.h>
 #include <unoevent.h>
-#include <iostream>
-#include <iomanip>
-#include <sstream>
 #include <future>
 #include <functional>
 
-#include <iunoplugincontroller.h>
+#include "SDRunoSDK.h"
 #include "SDRunoPlugin_TXLinkForm.h"
-#include "UDP_Server.h"
 
 #define WM_UDP_DATA_READY (WM_USER + 1)
 #define WM_FREQ_DATA_READY (WM_USER + 2)

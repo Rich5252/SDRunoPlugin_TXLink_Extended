@@ -1,7 +1,9 @@
 #include <sstream>
+#include <iostream>
 
 #include "SDRunoPlugin_TXLinkForm.h"
 #include "DXspiderClient.h"
+#include "MessageBox.h"
 
 
 void SDRunoPlugin_TXLinkForm::DXspotBtnClicked()

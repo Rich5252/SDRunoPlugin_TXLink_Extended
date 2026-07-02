@@ -4,8 +4,7 @@
 #include <mutex>              // For std::mutex, std::lock_guard, std::unique_lock
 #include <condition_variable> // For std::condition_variable
 #include <utility>            // For std::move
-#include <string>             // Required for the RTTYmsgOutQ template argument
-#include <vector>             // Required if you use vector<char> as the template argument
+
 
 /**
  * @class ThreadSafeMessageQueue
