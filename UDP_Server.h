@@ -4,7 +4,11 @@
 #include <string>
 #include <atomic>
 #include "MessageQueue.h"
-#include "SDRunoPlugin_TXLink.h"
+#include "UDPStatusEvent.h"   // struct UDPStatusEvent - kept in its own dependency-free header
+                                // to avoid a circular include with SDRunoPlugin_TXLinkForm.h
+
+#include "SDRUnoSDK.h"
+class SDRunoPlugin_TXLink;
 
 std::string ProcessPacket(char* message, int message_len);
 void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _parent);
@@ -23,9 +27,6 @@ struct LPWSTRGuard {
 std::string EncodeMessage(const std::string& WSJTX_TXmodeStr, const std::string& strMessage);
 std::string removeTrailingSpaces(std::string str);
 void PreemptiveTXCheck();
-
-#include "UDPStatusEvent.h"   // struct UDPStatusEvent - kept in its own dependency-free header
-// to avoid a circular include with SDRunoPlugin_TXLinkForm.h
 
 // Single queue carrying UDPStatusEvent snapshots from the UDP thread to the Form thread.
 // Replaces: std::atomic<bool> UDPevent + UDPEvent_mtx + the ~13 globals below.
