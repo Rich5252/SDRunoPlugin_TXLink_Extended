@@ -1,10 +1,6 @@
 #include <string>
 #include <windows.h>
 
-#include <windows.h>
-#include <string>
-#include <cstring> // For strstr
-
 #include "FindWindowTitleRoot.h"
 
 

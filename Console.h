@@ -3,9 +3,6 @@
 #include <windows.h>
 
 #include <iostream>
-#include <fstream>
-#include <fcntl.h>
-#include <io.h>
 
 #define debugConsule
 

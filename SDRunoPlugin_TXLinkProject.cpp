@@ -1,10 +1,8 @@
 #include <iunoplugin.h>
 #include <thread>
-#include <utility> // For std::move
 #include <iostream>
 
 #include "SDRunoPlugin_TXLink.h"
-#include "SDRunoPlugin_TXLinkUi.h"
 #include "MessageBox.h"
 
 extern "C"

@@ -2,10 +2,8 @@
 #include <iostream>
 
 #include "SDRunoPlugin_TXLinkForm.h"
-#include "SDRunoPlugin_TXLinkATUDialog.h"
 #include "SDRunoPlugin_TXLinkUi.h"
 #include "RTTY_Server.h"
-#include "DXspiderClient.h"
 #include "Heartbeat.h"
 #include "SDRUnoHelper.h"
 
