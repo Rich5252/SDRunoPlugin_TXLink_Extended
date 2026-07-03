@@ -5,11 +5,15 @@
 #include <windows.h>
 #include <atomic>
 
-#include "SDRunoPlugin_TXLink.h"
 #include "TunerServer.h"
+#include "SDRunoPlugin_TXLink.h"
+#include "SDRunoPlugin_TXLinkUi.h"
+#include "SDRunoPlugin_TXLinkForm.h"
 #include "SendKeys.h"
 #include "SDRUnoHelper.h"
 #include "MessageBox.h"
+#include "SimpleSerial.h"
+#include "SpliModeEnum.h"
 
 
 std::atomic<bool> TunerExitRequest(false);
@@ -24,7 +28,7 @@ void Tuner_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _
 	int32_t FreqIncr = 0;
 
 	const std::string tuner_com_port = "\\\\.\\COM9";
-	string tuner_COMportPrefix = "\\\\.\\";
+	std::string tuner_COMportPrefix = "\\\\.\\";
 	DWORD tuner_COM_BAUD_RATE = CBR_115200;
 	SimpleSerial TunerSerial(tuner_com_port, tuner_COM_BAUD_RATE, false);
 
@@ -60,14 +64,14 @@ void Tuner_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _
 				if (TunerExitRequest) { break; }
 				m_lock3.lock();
 
-				SDRunoPlugin_TXLinkForm::eSplitMode tmp;
+				eSplitMode tmp;
 				bool ritChk;
 				{
 					std::lock_guard<std::mutex> lock(g_splitModeMutex);
 					tmp = _parent.m_Ui->m_form->SplitMode;
 					ritChk = _parent.m_Ui->m_form->bRITchkbox;
 				}
-				if (tmp == SDRunoPlugin_TXLinkForm::SplitNone)
+				if (tmp == SplitNone)
 				{
 					//no split so change RX frequency
 					long Freq = GetVfoFrequencySafe(_controller, 0);
@@ -75,7 +79,7 @@ void Tuner_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _
 					EncoderSteps = 0;	//reset encoder steps
 					FreqIncr = 0;	//reset frequency increment
 				}
-				if (tmp == SDRunoPlugin_TXLinkForm::SplitTxRx)
+				if (tmp == SplitTxRx)
 				{
 					if (ritChk)
 					{

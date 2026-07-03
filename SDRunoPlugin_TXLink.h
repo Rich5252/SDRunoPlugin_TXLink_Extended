@@ -4,9 +4,9 @@
 #include <mutex>
 #include <atomic>
 
-#include "SDRunoPlugin_TXLinkForm.h"
-#include "SDRunoPlugin_TXLinkUi.h"
-
+#include "SDRunoSDK.h"
+#include "SpliModeEnum.h"
+class SDRunoPlugin_TXLinkUi;
 
 
 //TXlink plugin for SDRuno app. The plugin code is based on the SDRuno plugin template example.
@@ -61,7 +61,7 @@ public:
 	void updateRX_AnnoEntry(std::string tag, std::string tim, long long freq);
 	//end annotation
 
-	SDRunoPlugin_TXLinkForm::eSplitMode GetSplitMode();
+	eSplitMode GetSplitMode();
 
 	std::unique_ptr<std::thread> UDPthread;
 	std::unique_ptr<std::thread> TunerThread;

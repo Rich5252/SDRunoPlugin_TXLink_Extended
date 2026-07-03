@@ -7,7 +7,7 @@
 #include "UDPStatusEvent.h"   // struct UDPStatusEvent - kept in its own dependency-free header
                                 // to avoid a circular include with SDRunoPlugin_TXLinkForm.h
 
-#include "SDRUnoSDK.h"
+#include "SDRUnoSDK.h"          //DO NOT DELETE - needed for IUnoPluginController
 class SDRunoPlugin_TXLink;
 
 std::string ProcessPacket(char* message, int message_len);

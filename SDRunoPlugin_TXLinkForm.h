@@ -13,6 +13,7 @@
 #include <mutex>
 
 #include "SDRunoSDK.h"
+#include "SpliModeEnum.h"
 
 #include "SDRunoPlugin_TXLinkATUDialog.h"
 #include "SimpleSerial.h"
@@ -58,7 +59,7 @@ public:
 	string	strTXtemp = "";
 	bool	bRITchkbox = false;
 	bool	bOFSchkbox = false;
-
+	/*
 	enum eSplitMode {
 		SplitNone,			//same RxTx, both vrx0 & vrx1 track same freq, only vrx0 changes freq
 		SplitTxRx,			//split Rx Tx, vrx0 is RX freq and changes Rx, vrx1 is TX and can change TX
@@ -66,7 +67,7 @@ public:
 							//    wsjtx sets TX offset that is added to tx in Arduino.
 							//	  This mode set on first FT8 TX/Tune enable.
 	};
-
+	*/
 	bool TrackFreq = true;
 	eSplitMode SplitMode = SplitNone;
 	bool StandbyMode = true;

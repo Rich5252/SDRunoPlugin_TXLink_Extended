@@ -12,7 +12,8 @@ nana::detail::bedrock& get_bedrock_instance();
 #include <functional>
 
 #include "SDRunoSDK.h"
-#include "SDRunoPlugin_TXLinkForm.h"
+//#include "SDRunoPlugin_TXLinkForm.h"
+class SDRunoPlugin_TXLinkForm;
 
 #define WM_UDP_DATA_READY (WM_USER + 1)
 #define WM_FREQ_DATA_READY (WM_USER + 2)

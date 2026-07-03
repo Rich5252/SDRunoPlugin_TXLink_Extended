@@ -1,13 +1,8 @@
 #include <sstream>
-#ifdef _WIN32
-#include <Windows.h>
-#endif
 
 #include "SDRunoPlugin_TXLinkSettingsDialog.h"
 #include "SDRunoPlugin_TXLinkUi.h"
-#include "resource.h"
-#include <io.h>
-#include <shlobj.h>
+#include "SDRunoPlugin_TXLinkForm.h"
 
 // Form constructor with handles to parent and uno controller - launches form TemplateForm
 SDRunoPlugin_TemplateSettingsDialog::SDRunoPlugin_TemplateSettingsDialog(SDRunoPlugin_TXLinkUi& parent, IUnoPluginController& controller) :
@@ -204,7 +199,7 @@ void SDRunoPlugin_TemplateSettingsDialog::Setup()
 	freqCalLbl.fgcolor(nana::colors::white);
 	freqCalTb.multi_lines(false);
 	freqCalTb.events().text_changed([&] {
-		string strCal = freqCalTb.caption();
+		std::string strCal = freqCalTb.caption();
 		//?std::lock_guard<std::mutex> l(m_lock);
 		m_controller.SetConfigurationKey("TXLink.freqCal", strCal);
 		});
@@ -214,7 +209,7 @@ void SDRunoPlugin_TemplateSettingsDialog::Setup()
 	UPfreqLbl.fgcolor(nana::colors::white);
 	UPfreqTb.multi_lines(false);
 	UPfreqTb.events().text_changed([&] {
-		string strFreq = UPfreqTb.caption();
+		std::string strFreq = UPfreqTb.caption();
 		//?std::lock_guard<std::mutex> l(m_lock);
 		m_controller.SetConfigurationKey("TXLink.UPfreq", strFreq);
 		});
@@ -224,7 +219,7 @@ void SDRunoPlugin_TemplateSettingsDialog::Setup()
 	TXholdLbl.fgcolor(nana::colors::white);
 	TXholdTb.multi_lines(false);
 	TXholdTb.events().text_changed([&] {
-		string strTXhold = TXholdTb.caption();
+		std::string strTXhold = TXholdTb.caption();
 		//?std::lock_guard<std::mutex> l(m_lock);
 		m_controller.SetConfigurationKey("TXLink.TXhold", strTXhold);
 		});
@@ -234,7 +229,7 @@ void SDRunoPlugin_TemplateSettingsDialog::Setup()
 	FanHoldLbl.fgcolor(nana::colors::white);
 	FanHoldTb.multi_lines(false);
 	FanHoldTb.events().text_changed([&] {
-		string strFanHold = FanHoldTb.caption();
+		std::string strFanHold = FanHoldTb.caption();
 		//?std::lock_guard<std::mutex> l(m_lock);
 		m_controller.SetConfigurationKey("TXLink.FanHold", strFanHold);
 		});
@@ -244,7 +239,7 @@ void SDRunoPlugin_TemplateSettingsDialog::Setup()
 	FanLowPWMLbl.fgcolor(nana::colors::white);
 	FanLowPWMTb.multi_lines(false);
 	FanLowPWMTb.events().text_changed([&] {
-		string strFanLowPWM = FanLowPWMTb.caption();
+		std::string strFanLowPWM = FanLowPWMTb.caption();
 		//?std::lock_guard<std::mutex> l(m_lock);
 		m_controller.SetConfigurationKey("TXLink.FanLowPWM", strFanLowPWM);
 		});
@@ -254,14 +249,14 @@ void SDRunoPlugin_TemplateSettingsDialog::Setup()
 	FT8txDelayLbl.fgcolor(nana::colors::white);
 	FT8txDelayTb.multi_lines(false);
 	FT8txDelayTb.events().text_changed([&] {
-		string strFT8txDelay = FT8txDelayTb.caption();
+		std::string strFT8txDelay = FT8txDelayTb.caption();
 		//?std::lock_guard<std::mutex> l(m_lock);
 		m_controller.SetConfigurationKey("TXLink.FT8txDelay", strFT8txDelay);
 		});
 
 	FT2txPremptMsTb.multi_lines(false);
 	FT2txPremptMsTb.events().text_changed([&] {
-		string strFT2txPremptMs = FT2txPremptMsTb.caption();
+		std::string strFT2txPremptMs = FT2txPremptMsTb.caption();
 		//?std::lock_guard<std::mutex> l(m_lock);
 		m_controller.SetConfigurationKey("TXLink.RTCdelayOffset", strFT2txPremptMs);
 		});
@@ -271,7 +266,7 @@ void SDRunoPlugin_TemplateSettingsDialog::Setup()
 	TempLimitLbl.fgcolor(nana::colors::white);
 	TempLimitTb.multi_lines(false);
 	TempLimitTb.events().text_changed([&] {
-		string strTempLimit = TempLimitTb.caption();
+		std::string strTempLimit = TempLimitTb.caption();
 		//?std::lock_guard<std::mutex> l(m_lock);
 		m_controller.SetConfigurationKey("TXLink.TempLimit", strTempLimit);
 		});
@@ -282,7 +277,7 @@ void SDRunoPlugin_TemplateSettingsDialog::Setup()
 	m_timer.interval(std::chrono::milliseconds(100));
 	// this next call sets the code to be executed after every interval
 	m_timer.elapse([&] {
-		string tmp = "Temp = " + m_parent.m_form->strTXtemp + " degC";
+		std::string tmp = "Temp = " + m_parent.m_form->strTXtemp + " degC";
 		TXtempLbl.caption(tmp);
 		});
 	m_timer.start();

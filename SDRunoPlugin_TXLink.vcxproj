@@ -167,6 +167,7 @@
     <ClInclude Include="RealTimeClock_Utils.h" />
     <ClInclude Include="SDRUnoHelper.h" />
     <ClInclude Include="SDRunoSDK.h" />
+    <ClInclude Include="SpliModeEnum.h" />
     <ClInclude Include="UDPStatusEvent.h" />
     <ClInclude Include="UDP_Type17.h" />
     <ClInclude Include="MessageQueue.h" />

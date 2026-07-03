@@ -234,7 +234,7 @@ void SDRunoPlugin_TXLink::HandleEvent(const UnoEvent& ev)
 }
 
 
-SDRunoPlugin_TXLinkForm::eSplitMode SDRunoPlugin_TXLink::GetSplitMode()
+eSplitMode SDRunoPlugin_TXLink::GetSplitMode()
 {
 	return m_Ui->m_form->SplitMode;
 }
