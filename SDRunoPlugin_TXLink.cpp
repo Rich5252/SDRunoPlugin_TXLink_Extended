@@ -119,11 +119,6 @@ SDRunoPlugin_TXLink::~SDRunoPlugin_TXLink()
 void SDRunoPlugin_TXLink::StartTXLinkUi()
 {
 	std::cout << get_millis() << "SDRunoPlugin_TXLink::StartTXLinkUi: Starting UI and threads." << std::endl;
-	// Check if the UI has already been created (in case StartTXLinkUi is called multiple times)
-	if (!m_Ui) {
-		// FIX: UI Initialization ONLY HAPPENS HERE (Safe for permanent instance)
-		//m_Ui = std::make_unique<SDRunoPlugin_TXLinkUi>(*this, SDRunoPlugin_TXLink::m_controller);
-	}
 
 	// You MUST have a method in SDRunoPlugin_TXLinkUi to explicitly create/show the Nana form.
 	m_Ui->StartFormThread();
