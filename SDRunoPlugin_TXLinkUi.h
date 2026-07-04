@@ -1,23 +1,15 @@
 #pragma once
 
-namespace nana {
-	namespace detail {
-		class bedrock;
-	}
-}
-nana::detail::bedrock& get_bedrock_instance();
-
 #include <unoevent.h>
 #include <future>
 #include <functional>
 
 #include "SDRunoSDK.h"
-//#include "SDRunoPlugin_TXLinkForm.h"
+
+// Forward references
+class SDRunoPlugin_TXLink;
 class SDRunoPlugin_TXLinkForm;
 
-
-// Forward reference
-class SDRunoPlugin_TXLink;
 
 class SDRunoPlugin_TXLinkUi
 {
@@ -47,8 +39,6 @@ public:
 		return m_exitPromise.get_future();
 	}
 	std::promise<void> m_exitPromise;
-
-	void PostUDPevent();
 
 private:
 	
