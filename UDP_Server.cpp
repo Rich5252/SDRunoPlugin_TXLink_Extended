@@ -12,6 +12,7 @@
 
 #include "WSJTX_Packet.h"
 #include "UDP_Server.h"
+#include "WSJTX_Status_Processor.h"   // Status packet processing and PreemptiveTX logic
 #include "MessageQueue.h"
 #include "RealTimeClock_Utils.h"
 #include "MessageBox.h"
@@ -42,44 +43,12 @@ ThreadSafeMessageQueue<uint64_t> WSJTX_UDPOutQ;           //data from plugin to 
 // directly (with only partial synchronisation) on the Form thread.
 ThreadSafeMessageQueue<UDPStatusEvent> UDPStatusQueue;
 
-// --- UDP-thread-local working/decision state ---
-// These never need to cross threads: they exist purely to help ProcessPacket()
-// and PreemptiveTXCheck() decide what to put into the NEXT UDPStatusEvent.
-// They stay as plain globals/statics confined to this translation unit/thread.
-// (EncodeMessage() writes strDecodeMsg as a side-effect, so it can't be a
-// purely-local variable inside ProcessPacket - it needs this thread-confined
-// static so EncodeMessage's outcome is visible to the code that builds the event.)
-static std::string WSJTX_TXmodeStr = "FT8";
-static std::string strDecodeMsg = "NOCALL";
-static std::string LastTXmsg = "";
-static bool TXmodeChange = true;
-static uint64_t curFrequency = 0;                  //local store
-static bool msgChanged = false;                    //local decision state for TXeven logic
-static bool TXeven = true;
-static bool TXenabled = false;
-static bool TXpreempted = false;                    //Preemptive TX has started
-static int TXpreemptedStartSlot = 0;                //Slot in which Preemptive TX started (0-11)
-static uint64_t PreemptiveTXstartMs = 0;            //start time
-
-// Remembers the most recently pushed FULL UDPStatusEvent (from ProcessPacket).
-// PreemptiveTXCheck() builds its own event as a copy of this rather than a
-// fresh, mostly-blank UDPStatusEvent - otherwise, if its minimal event happens
-// to be the LAST one popped during the Form's coalescing drain, it overwrites
-// m_lastUDPStatus with blank dxCall/dxGrid/report/rxDF/etc, silently corrupting
-// the Form's view of state until the next full status packet arrives.
-static UDPStatusEvent lastFullEvent;
-
-// Carry-forward "last known value" state - the old globals served both as
-// "current value" and "value to send to Form"; these statics keep that same
-// carry-forward behaviour (e.g. txSymbols/DXcall stay the same across packets
-// where nothing changed) without exposing the value to the Form thread directly.
-static bool TXflgLocal = false;
-static int TXDFLocal = 0;
-static std::string TXsymbolsLocal = "3140652002457262353553516142250015633140652505007562410457700470324420543140652";
-static std::string DXcallLocal = "";
-static std::string DXgridLocal = "";
-static std::string strReportLocal = "";
-static uint32_t RxDFLocal = 0;
+// --- WSJTX Status packet processor ---
+// Owns all the working state for Status packet processing and PreemptiveTX.
+// Static local - same lifetime as the old file-scope statics it replaces,
+// just properly encapsulated so ProcessPacket and PreemptiveTXCheck share
+// state cleanly without it leaking into this file's global scope.
+static WSJTX_StatusProcessor g_statusProcessor;
 
 int RTCdelay = 300;			//delay in ms currently applied to RTC
 int RTCdelayOffset = 0;		//local offset from Settings that reduces RTCdelay value
@@ -235,7 +204,7 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
                 //std::cout << " " << ++waitCount;
                 if ((++waitCount % 10) == 0) { std::cout << " " << waitCount; }
 
-                PreemptiveTXCheck();   // Check for preemptive TX conditions during wait
+                g_statusProcessor.PreemptiveTXCheck(UDPStatusQueue, RTCdelay);   // preemptive TX check during wait
 
                 continue; // Go back to the top of the loop to check UDPExitRequest
             }
@@ -269,7 +238,8 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
 
             //diagnostic output
             uint64_t ms = GetCurrentTimeMs();
-            int slotPeriod = WSJTX_TXmodeStr == "FT2" ? 3750 : (WSJTX_TXmodeStr == "FT4" ? 7500 : 15000);
+            int slotPeriod = g_statusProcessor.GetTXmodeStr() == "FT2" ? 3750
+                : g_statusProcessor.GetTXmodeStr() == "FT4" ? 7500 : 15000;
             string str1 = get_millis() + "UDP packet done: " + strPacketType + " " + FormatUtcTime(ms) + " DT: " + to_string(ms % slotPeriod) + "\r\n";
             std::cout << str1;
 
@@ -286,34 +256,9 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
 
 void PreemptiveTXCheck()
 {
-    if (RTCdelay <= 50) { return; }     //if delay is minimal dont preempt - allow wsjtx to control (so can introduce longer delays)
-
-    uint64_t ms = GetCurrentTimeMs();
-    int slotPeriod = WSJTX_TXmodeStr == "FT2" ? 3750 : (WSJTX_TXmodeStr == "FT4" ? 7500 : 15000);
-    int SlotNumber = ms % 60000 / slotPeriod;                     //current slot number in minute (0-15)
-    int TimeInSlot = ms % slotPeriod;
-    int TimeToNextSlot = slotPeriod - TimeInSlot;
-    bool inTxSlot = (((ms / slotPeriod) % 2) == 0) == TXeven;   //true if we are in the TX slot for the current even/odd setting
-
-    // Preemptive TX start - start in previous slot if enabled and not already preempted
-    if (strDecodeMsg != "TUNE" && TXenabled && !inTxSlot && TimeToNextSlot < (RTCdelay) && !TXpreempted)   //note we start TX in previous slot
-    {                                   //expeimental - tx early cf PC RTC since PC clock delayed for SDR etc
-        PreemptiveTXstartMs = GetCurrentTimeMs();
-        string str1 = (TXeven ? " TX even. " : " TX odd. ");
-        string str2 = "\r\n" + get_millis() + "Preemptive TX: " + FormatUtcTime(PreemptiveTXstartMs) + " Slot: " + to_string(SlotNumber) + " DT: " + to_string(PreemptiveTXstartMs % slotPeriod) + str1 + "RTCdelay: " + to_string(RTCdelay) + "\r\n";
-        std::cout << str2;
-        TXpreempted = true;      //indicates when Preempted TX has started. Reset when next packet received (checking correct slot)
-        TXpreemptedStartSlot = SlotNumber;
-
-        // Build the event as a copy of the most recent FULL snapshot, only
-        // overriding the fields this preemptive-start actually changes.
-        // (NOT a fresh, blank UDPStatusEvent - see lastFullEvent's comment for why.)
-        UDPStatusEvent evt = lastFullEvent;
-        evt.txFlag = true;            //force TX now
-        evt.txModeStr = WSJTX_TXmodeStr;
-        evt.decodeMsg = strDecodeMsg;
-        UDPStatusQueue.push(evt);      //queue push is itself thread-safe; no separate flag/mutex needed
-    }
+    // Thin wrapper retained so any existing call sites outside this file
+    // don't need changing. Real implementation is in WSJTX_StatusProcessor.
+    g_statusProcessor.PreemptiveTXCheck(UDPStatusQueue, RTCdelay);
 }
 
 std::string ProcessPacket(char* message, int message_len)
@@ -331,166 +276,9 @@ std::string ProcessPacket(char* message, int message_len)
         // emit UI update signal for heartbeat if needed
     }
     else if (NewPacket.PacketType == 1) {
-        //status packet contains next ft8 message and TX on/off updates
-        WSJTX_Status StatusPacket(pkt, NewPacket.index);
-        StatusPacket.Decode();
-
-        //std::cout << "Status decode. Frequency = " << StatusPacket.Frequency << " Mode = " << StatusPacket.Mode << " TxEnabled = " << StatusPacket.TxEnabled << std::endl;
-
-        std::string msg = StatusPacket.DefaultTXMessage;
-        msg = removeTrailingSpaces(msg);
-
-        std::cout << "\n" << get_millis() << "NewStatusPacket: DefaultTXMessage = " << '"' << StatusPacket.DefaultTXMessage << '"' << std::endl;
-
-        if (msg == "") { msg = "CQ G4AHN IO91"; }                           //default message if empty
-
-        // Build the outgoing event locally - nothing shared is touched until
-        // the single UDPStatusQueue.push() at the end. No flag, no wait-loop,
-        // no possibility of two threads seeing a half-written snapshot.
-        UDPStatusEvent evt;
-
-        bool dataChanged = false;   //local now - reset each packet, set true if any data changes below
-        uint64_t newFrequency = 0;
-        if (StatusPacket.Frequency != curFrequency)
-        {
-            newFrequency = StatusPacket.Frequency;
-            curFrequency = newFrequency;
-            dataChanged = true;
-        }
-        if (WSJTX_TXmodeStr != StatusPacket.Mode) { TXmodeChange = true; dataChanged = true; }
-        WSJTX_TXmodeStr = StatusPacket.Mode;
-
-        bool haltTXevent = false;
-        if (TXflgLocal && !StatusPacket.Transmitting && !StatusPacket.TxEnabled) { haltTXevent = true; }
-        bool txFlag = StatusPacket.Transmitting;  //transmit on/off
-        if (TXDFLocal != StatusPacket.TxDF) { dataChanged = true; }
-        TXDFLocal = StatusPacket.TxDF;           //transmit freq offset added to set TX freq
-
-        msgChanged = false;
-        std::string txSymbols = TXsymbolsLocal;   //carry forward unless changed below
-        if (LastTXmsg == "" || LastTXmsg != msg)
-        {
-            txSymbols = EncodeMessage(WSJTX_TXmodeStr, msg);         //list of tones to transmit
-            dataChanged = true;
-            msgChanged = true;
-        }
-
-        LastTXmsg = msg;                                                                        //store last message sent
-        TXsymbolsLocal = txSymbols;
-        TXflgLocal = txFlag;
-
-        std::string newDXcall = "";
-        if (StatusPacket.DXCall != DXcallLocal) { newDXcall = StatusPacket.DXCall; }
-        DXcallLocal = StatusPacket.DXCall;
-        DXgridLocal = StatusPacket.DXgrid;
-        strReportLocal = StatusPacket.Report;    //report to send
-        RxDFLocal = StatusPacket.RxDF;       //receive freq offset
-
-        //special handling for the Preemptive TX, remember tx period
-        uint64_t ms = GetCurrentTimeMs();
-        int slotPeriod = WSJTX_TXmodeStr == "FT2" ? 3750 : (WSJTX_TXmodeStr == "FT4" ? 7500 : 15000);
-        int nSlot = (ms % 60000) / slotPeriod;
-		bool IsSlotEven = ((ms / slotPeriod) % 2) == 0;
-        int DTC = ms % slotPeriod;
-        int SlotTimeLeft = slotPeriod - DTC;
-
-        TXenabled = StatusPacket.TxEnabled;
-        if (TXenabled)
-        {
-			//Do we need to abort a preemptive TX because it started in the wrong slot.
-			//We are looking for a packet early in TXslot that would normally be a TX packet but says "not transmitting" - this is a preemptive TX abort
-            // Latest WSJTX has an FT2 end tx packet very close to end of slot which comes after a valid PreemptTX so ignore this.
-
-            if (TXpreempted &&  nSlot != TXpreemptedStartSlot && (ms - PreemptiveTXstartMs) < 1000 && !StatusPacket.Transmitting && TXeven == IsSlotEven)
-                // We are in the slot following preemptive TX but wsjtx says not TX so must mean slot was wrong
-                 // so do a halt TX
-            {
-                haltTXevent = true;
-                TXpreempted = false;
-                string str1 = get_millis() + "Preemptive TX Halt. DT: " + to_string(DTC) + "  trPeriod = " + to_string(StatusPacket.trPeriod) + "\r\n";
-                std::cout << str1;
-            }
-
-            //Assess which is correct TX slot. We can be sure if packet says TXenabled and Transmitting.
-			// More difficult if TXenabled and not Transmitting because normally a packet is received towards end of TX slot to stop TX.
-            
-            bool even = (ms / slotPeriod) % 2 == 0;
-            if (StatusPacket.Transmitting)   TXeven = even;              //can only be certain when wsjtx is tx'ing
-            if (nSlot != TXpreemptedStartSlot && !msgChanged && !StatusPacket.Transmitting && TXenabled && SlotTimeLeft > 3000) TXeven = !even;
-        }
-        if (StatusPacket.Transmitting)  TXpreempted = false;            //reset preemptive flag when actual TX starts
-
-        string str0 = "UDPPush: ";
-        string str1 = dataChanged ? "Data change. " : "Data nochange. ";
-        string str2 = msgChanged ? "Msg change. " : "Msg unchanged. ";
-        string str3 = TXeven ? "TXslot Even. " : "TXslot Odd ";
-        string str4 = StatusPacket.Transmitting ? "TX On. " : "TX off. ";
-        string str5 = TXenabled ? " TXenabled. " : " TXdisabled. ";
-        std::cout << get_millis() << str0 << str1 << str2 << str5 << str3 << str4 << "Slot: " << nSlot << " SlotTimeLeft: " << SlotTimeLeft << std::endl;
-
-
-        // Populate and push the complete event - single source of truth for
-        // this packet, consumed as one atomic unit by the Form thread.
-        evt.newFrequency = newFrequency;
-        evt.dataChanged = dataChanged;
-        evt.txDF = TXDFLocal;
-        evt.txSymbols = TXsymbolsLocal;
-        evt.txFlag = TXflgLocal;
-        evt.txModeStr = WSJTX_TXmodeStr;
-        evt.haltTXevent = haltTXevent;
-        evt.txModeChanged = TXmodeChange;
-        TXmodeChange = false;      // one-shot: consumed into this event, reset for next packet
-        evt.newDXcall =  newDXcall;
-        evt.decodeMsg = strDecodeMsg;
-        evt.dxCall = DXcallLocal;
-        evt.dxGrid = DXgridLocal;
-        evt.report = strReportLocal;
-        evt.rxDF = RxDFLocal;
-
-        lastFullEvent = evt;    // remember as the latest full snapshot, for PreemptiveTXCheck to build on
-        UDPStatusQueue.push(evt);
-
-        // One-shot/edge-triggered fields must NOT persist in the carry-forward copy -
-        // each represents "this happened on that specific packet", not ongoing state.
-        // If left set, the next PreemptiveTXCheck() call (which copies lastFullEvent)
-        // would re-signal something that already happened, possibly packets later -
-        // including redundant serial writes to the TX hardware (dataChanged) or
-        // re-triggering a frequency/data-mode update that's already been applied
-        // (newFrequency - this used to be reset by the Form after consuming it, back
-        // when it was a shared global; now the Form's copy (evt) is immutable once
-        // pushed, so the reset has to happen here, on the carry-forward copy instead).
-        lastFullEvent.newDXcall = "";
-        lastFullEvent.haltTXevent = false;
-        lastFullEvent.txModeChanged = false;
-        lastFullEvent.dataChanged = false;
-        lastFullEvent.newFrequency = 0;
-
-        // Moved to AFTER evt is built/pushed so PreemptiveTXCheck (if it fires)
-        // starts from this packet's up-to-date data via lastFullEvent, not the
-        // previous packet's. haltTXevent here still reflects ONLY this packet's
-        // own halt decision (set above, untouched since) - so the guard still
-        // correctly prevents re-triggering a preemptive start in the same
-        // packet that just decided to halt one; only the TIMING of the call
-        // moved, not what haltTXevent means.
-        if (!haltTXevent) PreemptiveTXCheck();                // may push its own, separate UDPStatusEvent
-
-
-		//QRZ lookup  (moved from Form thread to reduce load on its thread)
-        if (newDXcall != "")        //&& !bLastTenCalls(evt.newDXcall))
-        {
-            std::string strURL = "https://www.qrz.com/db/" + evt.newDXcall;
-
-            std::thread([strURL]()					//do this in a separate thread so it doesn't block the main thread
-                {
-                    LPWSTRGuard op("open");
-                    LPWSTRGuard app("chrome.exe");
-                    LPWSTRGuard url(strURL.c_str());
-
-                    ShellExecute(NULL, op, app, url, NULL, SW_SHOWNORMAL);
-                }).detach();
-        }
-
-        return "Status Update Pushed to Form. ";
+        // Delegated entirely to WSJTX_StatusProcessor.
+        // All state, slot tracking, preemptive TX and event building lives there.
+        return g_statusProcessor.ProcessStatus(pkt, NewPacket.index, UDPStatusQueue, RTCdelay);
     }
     else if (NewPacket.PacketType == 2) {
         WSJTX_Decode DecodePacket(pkt, NewPacket.index);
@@ -562,7 +350,7 @@ std::string removeTrailingSpaces(std::string str) {
 }
 
 
-std::string EncodeMessage(const std::string& WSJTX_TXmodeStr, const std::string& strMessage) {
+EncodeResult EncodeMessage(const std::string& WSJTX_TXmodeStr, const std::string& strMessage) {
     std::cout << get_millis() << "EncodeMessage mode: " << WSJTX_TXmodeStr << " msg: " << strMessage << std::endl;
 
     const std::string ft8Path = strFT8WSJTXpath;
@@ -585,13 +373,11 @@ std::string EncodeMessage(const std::string& WSJTX_TXmodeStr, const std::string&
         requiredLength = 105;
     }
     else {
-        strDecodeMsg = "Invalid WSJTX_TXmodeStr";
-        return TxNoSymbols;
+        return { TxNoSymbols, "Invalid WSJTX_TXmodeStr" };
     }
 
     if (strMessage == "TUNE") {
-        strDecodeMsg = "TUNE";
-        return symbols;
+        return { symbols, "TUNE" };
     }
 
     // --- Command setup with wstring for Unicode API ---
@@ -617,14 +403,12 @@ std::string EncodeMessage(const std::string& WSJTX_TXmodeStr, const std::string&
     saAttr.lpSecurityDescriptor = NULL;
 
     if (!CreatePipe(&hChildStdOutRead, &hChildStdOutWrite, &saAttr, 0)) {
-        strDecodeMsg = "CreatePipe failed.";
-        return symbols;
+        return { symbols, "CreatePipe failed." };
     }
     if (!SetHandleInformation(hChildStdOutRead, HANDLE_FLAG_INHERIT, 0)) {
-        strDecodeMsg = "SetHandleInformation failed.";
         CloseHandle(hChildStdOutRead);
         CloseHandle(hChildStdOutWrite);
-        return symbols;
+        return { symbols, "SetHandleInformation failed." };
     }
 
     // --- Process creation ---
@@ -636,16 +420,15 @@ std::string EncodeMessage(const std::string& WSJTX_TXmodeStr, const std::string&
     siStartInfo.dwFlags |= STARTF_USESTDHANDLES;
 
     if (!CreateProcess(NULL, command.data(), NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &siStartInfo, &piProcInfo)) {
-        strDecodeMsg = "CreateProcess failed.";
         CloseHandle(hChildStdOutRead);
         CloseHandle(hChildStdOutWrite);
-        return symbols;
+        return { symbols, "CreateProcess failed." };
     }
 
     // --- Close parent's write handle to the pipe ---
     CloseHandle(hChildStdOutWrite);
 
-    // --- Read and process output from child process ---
+    // --- Read output from child process ---
     DWORD bytesRead = 0;
     char buffer[1024]{};
     std::string output;
@@ -655,13 +438,12 @@ std::string EncodeMessage(const std::string& WSJTX_TXmodeStr, const std::string&
         output += buffer;
     }
 
-    // --- Final cleanup after reading is complete ---
+    // --- Final cleanup ---
     CloseHandle(hChildStdOutRead);
     CloseHandle(piProcInfo.hProcess);
     CloseHandle(piProcInfo.hThread);
 
     // --- Output parsing and validation ---
-    // Simplified parsing logic
     std::istringstream iss(output);
     std::string line;
     int lineCount = 0;
@@ -670,17 +452,16 @@ std::string EncodeMessage(const std::string& WSJTX_TXmodeStr, const std::string&
     while (std::getline(iss, line, '\n')) {
         lineCount++;
         std::cout << "Line " << lineCount << ": " << line << std::endl;
-        // Use a more robust check for decoded message and symbols line
         if (lineCount == 3) {
             if (line.length() >= 42) {
                 decodedMessage = line.substr(42, 40);
             }
             else {
-                strDecodeMsg = "Encode error L3 - short line.";
-                return TxNoSymbols;
+                return { TxNoSymbols, "Encode error L3 - short line." };
             }
         }
-        if ((WSJTX_TXmodeStr == "FT8" && lineCount == 16) || ((WSJTX_TXmodeStr == "FT2" || WSJTX_TXmodeStr == "FT4") && lineCount == 22)) {
+        if ((WSJTX_TXmodeStr == "FT8" && lineCount == 16)
+            || ((WSJTX_TXmodeStr == "FT2" || WSJTX_TXmodeStr == "FT4") && lineCount == 22)) {
             symbols = line;
             break;
         }
@@ -690,15 +471,15 @@ std::string EncodeMessage(const std::string& WSJTX_TXmodeStr, const std::string&
     if (!symbols.empty()) {
         symbols.erase(std::remove_if(symbols.begin(), symbols.end(), ::isspace), symbols.end());
         if (symbols.length() == requiredLength) {
-            strDecodeMsg = removeTrailingSpaces(decodedMessage);
-            std::cout << get_millis() << "Encode Done: " << "symbols length = " << symbols.length() << "  strDecodeMsg = " << strDecodeMsg << std::endl;
+            std::string decodeMsg = removeTrailingSpaces(decodedMessage);
+            std::cout << get_millis() << "Encode Done: symbols length = " << symbols.length()
+                << "  decodeMsg = " << decodeMsg << std::endl;
             std::cout << symbols << std::endl;
-            return symbols;
+            return { symbols, decodeMsg };
         }
     }
 
-    strDecodeMsg = "ftxcode.exe symbols error - unexpected output.";
-    return TxNoSymbols;
+    return { TxNoSymbols, "ftxcode.exe symbols error - unexpected output." };
 }
 
 std::string strPacketType(int type)

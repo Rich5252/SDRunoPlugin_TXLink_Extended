@@ -5,7 +5,7 @@
 #include <atomic>
 #include "MessageQueue.h"
 #include "UDPStatusEvent.h"   // struct UDPStatusEvent - kept in its own dependency-free header
-                                // to avoid a circular include with SDRunoPlugin_TXLinkForm.h
+// to avoid a circular include with SDRunoPlugin_TXLinkForm.h
 
 #include "SDRUnoSDK.h"          //DO NOT DELETE - needed for IUnoPluginController
 class SDRunoPlugin_TXLink;
@@ -24,9 +24,18 @@ struct LPWSTRGuard {
 };
 
 
-std::string EncodeMessage(const std::string& WSJTX_TXmodeStr, const std::string& strMessage);
+// Result type for EncodeMessage - replaces the old side-effect pattern where
+// EncodeMessage wrote strDecodeMsg as a global side-effect. Now both outputs
+// are returned explicitly, making the function self-contained and testable.
+struct EncodeResult
+{
+    std::string symbols;    // tone symbol string for the hardware
+    std::string decodeMsg;  // human-readable message/status for display
+};
+
+EncodeResult EncodeMessage(const std::string& WSJTX_TXmodeStr, const std::string& strMessage);
 std::string removeTrailingSpaces(std::string str);
-void PreemptiveTXCheck();
+void PreemptiveTXCheck();  // thin wrapper - delegates to g_statusProcessor in UDP_Server.cpp
 
 // Single queue carrying UDPStatusEvent snapshots from the UDP thread to the Form thread.
 // Replaces: std::atomic<bool> UDPevent + UDPEvent_mtx + the ~13 globals below.
