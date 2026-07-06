@@ -30,8 +30,11 @@ public:
 
     // Look up callsign via QRZ XML API, extract grid locator,
     // and place it on the Windows clipboard. Logs to std::cout.
+    // fallbackGrid: WSJT-X's own grid for this station - used if QRZ
+    // returns nothing or a result that disagrees on the first 4 chars.
     // Returns true if a grid was found and copied successfully.
-    bool LookupAndCopyGrid(const std::string& callsign);
+    bool LookupAndCopyGrid(const std::string& callsign,
+        const std::string& fallbackGrid = "");
 
 private:
     std::string m_sessionKey;   // cached - re-acquired on expiry
@@ -54,4 +57,10 @@ private:
 
     // Place text on the Windows clipboard.
     bool CopyToClipboard(const std::string& text);
+
+    // Validate and normalise a Maidenhead grid locator.
+    // Converts to uppercase, checks format: 2 letters + 2 digits + 2 letters.
+    // Returns the uppercased grid if valid, empty string if not.
+    // Accepts both 4-char (field+square) and 6-char (full) locators.
+    std::string ValidateGrid(const std::string& grid);
 };

@@ -164,6 +164,10 @@ std::string WSJTX_StatusProcessor::ProcessStatus(
     lastFullEvent = evt;
     queue.push(evt);
 
+	//keep copies for QRZ lookup below        
+    std::string callsignCopy = newDXcall;
+    std::string dxGridCopy = DXgridLocal;   // WSJT-X grid as fallback for QRZ validation
+
     // Clear one-shot fields from the carry-forward copy so PreemptiveTXCheck
     // doesn't re-signal events that already happened on this packet.
     lastFullEvent.newDXcall = "";
@@ -184,9 +188,8 @@ std::string WSJTX_StatusProcessor::ProcessStatus(
     if (!newDXcall.empty())
     {
         std::string strURL = "https://www.qrz.com/db/" + newDXcall;
-        std::string callsignCopy = newDXcall;   // capture by value for thread safety
 
-        std::thread([strURL, callsignCopy]()
+        std::thread([strURL, callsignCopy, dxGridCopy]()
             {
                 // Open the QRZ page in Chrome as before
                 LPWSTRGuard op("open");
@@ -198,7 +201,7 @@ std::string WSJTX_StatusProcessor::ProcessStatus(
                 // Static instance persists its session key across calls so we
                 // re-authenticate only when the session actually expires.
                 static QRZLookup qrz;
-                qrz.LookupAndCopyGrid(callsignCopy);
+                qrz.LookupAndCopyGrid(callsignCopy, dxGridCopy);
             }).detach();
     }
 

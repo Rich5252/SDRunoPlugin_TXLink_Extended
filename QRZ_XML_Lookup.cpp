@@ -35,15 +35,10 @@ bool QRZLookup::GetCredentials(std::string& username, std::string& password)
     }
 
     username = pCred->UserName ? pCred->UserName : "";
-
-    // CredentialBlob is stored as UTF-16 (wide chars) by the C# app.
-    // Convert from wide to narrow rather than reinterpreting raw bytes.
     if (pCred->CredentialBlobSize > 0)
     {
         const wchar_t* wPass = reinterpret_cast<const wchar_t*>(pCred->CredentialBlob);
         int wLen = pCred->CredentialBlobSize / sizeof(wchar_t);
-
-        // WideCharToMultiByte converts UTF-16 -> UTF-8/ACP
         int narrowLen = WideCharToMultiByte(CP_UTF8, 0, wPass, wLen,
             nullptr, 0, nullptr, nullptr);
         if (narrowLen > 0)
@@ -275,21 +270,61 @@ bool QRZLookup::CopyToClipboard(const std::string& text)
 }
 
 //-----------------------------------------------------------------------------
-// LookupAndCopyGrid
-// Main entry point. Looks up callsign, extracts grid, copies to clipboard.
-// Handles session expiry by re-authenticating once automatically.
+// ValidateGrid
+// Validates a Maidenhead grid locator and returns it uppercased.
+// Accepts 4-char (field+square only) or 6-char (full with subsquare).
+// Format: 2 letters + 2 digits [+ 2 letters]
+// Returns empty string if format is invalid.
 //-----------------------------------------------------------------------------
-bool QRZLookup::LookupAndCopyGrid(const std::string& callsign)
+std::string QRZLookup::ValidateGrid(const std::string& grid)
+{
+    if (grid.empty()) return "";
+
+    // Uppercase a copy for comparison and output
+    std::string g = grid;
+    for (char& c : g) c = static_cast<char>(toupper(static_cast<unsigned char>(c)));
+
+    // Must be exactly 4 or 6 characters
+    if (g.size() != 4 && g.size() != 6) return "";
+
+    // Positions 0,1 must be letters (field)
+    if (!isalpha(static_cast<unsigned char>(g[0]))) return "";
+    if (!isalpha(static_cast<unsigned char>(g[1]))) return "";
+
+    // Positions 2,3 must be digits (square)
+    if (!isdigit(static_cast<unsigned char>(g[2]))) return "";
+    if (!isdigit(static_cast<unsigned char>(g[3]))) return "";
+
+    // If 6 chars, positions 4,5 must be letters (subsquare)
+    if (g.size() == 6)
+    {
+        if (!isalpha(static_cast<unsigned char>(g[4]))) return "";
+        if (!isalpha(static_cast<unsigned char>(g[5]))) return "";
+    }
+
+    return g;   // valid - return uppercased
+}
+
+//-----------------------------------------------------------------------------
+// LookupAndCopyGrid
+// Main entry point. Looks up callsign, validates grid against fallback,
+// copies best result to clipboard.
+//-----------------------------------------------------------------------------
+bool QRZLookup::LookupAndCopyGrid(const std::string& callsign,
+    const std::string& fallbackGrid)
 {
     std::cout << get_millis()
-        << " QRZLookup: Looking up grid for " << callsign << std::endl;
+        << " QRZLookup: Looking up grid for " << callsign
+        << (fallbackGrid.empty() ? "" : " (WSJTX fallback: " + fallbackGrid + ")")
+        << std::endl;
+
+    // Validate and normalise the WSJT-X fallback grid upfront
+    std::string validFallback = ValidateGrid(fallbackGrid);
 
     // Get credentials from Windows Credential Manager
     std::string username, password;
     if (!GetCredentials(username, password))
-    {
         return false;
-    }
 
     // Acquire session key if we don't have one
     if (m_sessionKey.empty())
@@ -320,46 +355,100 @@ bool QRZLookup::LookupAndCopyGrid(const std::string& callsign)
         response = doLookup();
     }
 
-    if (response.empty())
+    // --- Grid selection logic ---
+    // 1. Validate QRZ result
+    // 2. If valid AND first 4 chars match fallback -> use QRZ (more precise)
+    // 3. Otherwise use fallback if it's valid
+    // 4. Log and abort if neither is usable
+
+    std::string qrzGrid;
+    if (!response.empty())
+    {
+        std::string error = ExtractXmlValue(response, "Error");
+        if (!error.empty())
+        {
+            std::cout << get_millis()
+                << " QRZLookup: QRZ error for " << callsign
+                << ": " << error << std::endl;
+        }
+        else
+        {
+            std::string raw = ExtractXmlValue(response, "grid");
+            // Trim whitespace
+            raw.erase(0, raw.find_first_not_of(" \t\r\n"));
+            if (!raw.empty())
+                raw.erase(raw.find_last_not_of(" \t\r\n") + 1);
+
+            qrzGrid = ValidateGrid(raw);
+            if (qrzGrid.empty())
+            {
+                std::cout << get_millis()
+                    << " QRZLookup: QRZ grid '" << raw
+                    << "' failed format validation for " << callsign
+                    << std::endl;
+            }
+        }
+    }
+    else
     {
         std::cout << get_millis()
             << " QRZLookup: Empty response for " << callsign << std::endl;
-        return false;
     }
 
-    // Check for API-level error (e.g. callsign not found)
-    std::string error = ExtractXmlValue(response, "Error");
-    if (!error.empty())
+    // Determine which grid to use
+    std::string finalGrid;
+
+    if (!qrzGrid.empty() && !validFallback.empty())
+    {
+        // Both available - check first 4 chars agree
+        if (qrzGrid.substr(0, 4) == validFallback.substr(0, 4))
+        {
+            // QRZ agrees with WSJT-X and is likely more precise (6 chars)
+            finalGrid = qrzGrid;
+            std::cout << get_millis()
+                << " QRZLookup: Using QRZ grid " << finalGrid
+                << " (agrees with WSJT-X " << validFallback << ")"
+                << std::endl;
+        }
+        else
+        {
+            // QRZ disagrees - trust WSJT-X
+            finalGrid = validFallback;
+            std::cout << get_millis()
+                << " QRZLookup: QRZ grid " << qrzGrid
+                << " disagrees with WSJT-X " << validFallback
+                << " on first 4 chars - using WSJT-X fallback" << std::endl;
+        }
+    }
+    else if (!qrzGrid.empty())
+    {
+        // No fallback to compare against - use QRZ result directly
+        finalGrid = qrzGrid;
+        std::cout << get_millis()
+            << " QRZLookup: Using QRZ grid " << finalGrid
+            << " (no WSJT-X fallback to compare)" << std::endl;
+    }
+    else if (!validFallback.empty())
+    {
+        // QRZ gave nothing useful - fall back to WSJT-X
+        finalGrid = validFallback;
+        std::cout << get_millis()
+            << " QRZLookup: QRZ lookup failed, using WSJT-X fallback "
+            << finalGrid << std::endl;
+    }
+    else
     {
         std::cout << get_millis()
-            << " QRZLookup: QRZ error for " << callsign
-            << ": " << error << std::endl;
+            << " QRZLookup: No valid grid available for "
+            << callsign << " - clipboard not updated" << std::endl;
         return false;
     }
 
-    // Extract the grid locator
-    std::string grid = ExtractXmlValue(response, "grid");
-    if (grid.empty())
-    {
-        std::cout << get_millis()
-            << " QRZLookup: No grid entry found for " << callsign
-            << std::endl;
-        return false;
-    }
-
-    // Trim whitespace
-    grid.erase(0, grid.find_first_not_of(" \t\r\n"));
-    grid.erase(grid.find_last_not_of(" \t\r\n") + 1);
-
-    std::cout << get_millis()
-        << " QRZLookup: Grid for " << callsign
-        << " = " << grid << std::endl;
-
-    if (!CopyToClipboard(grid))
+    if (!CopyToClipboard(finalGrid))
         return false;
 
     std::cout << get_millis()
-        << " QRZLookup: Grid '" << grid
-        << "' copied to clipboard." << std::endl;
+        << " QRZLookup: Grid '" << finalGrid
+        << "' copied to clipboard for " << callsign << std::endl;
     return true;
 }
