@@ -9,6 +9,7 @@
 #include "UDP_Server.h"         // LPWSTRGuard, EncodeMessage, removeTrailingSpaces
 #include "RealTimeClock_Utils.h"
 #include "MessageBox.h"         // get_millis()
+#include "QRZ_XML_Lookup.h"
 
 using namespace std;
 
@@ -183,12 +184,21 @@ std::string WSJTX_StatusProcessor::ProcessStatus(
     if (!newDXcall.empty())
     {
         std::string strURL = "https://www.qrz.com/db/" + newDXcall;
-        std::thread([strURL]()
+        std::string callsignCopy = newDXcall;   // capture by value for thread safety
+
+        std::thread([strURL, callsignCopy]()
             {
+                // Open the QRZ page in Chrome as before
                 LPWSTRGuard op("open");
                 LPWSTRGuard app("chrome.exe");
                 LPWSTRGuard url(strURL.c_str());
                 ShellExecute(NULL, op, app, url, NULL, SW_SHOWNORMAL);
+
+                // Also do a QRZ XML grid lookup and copy to clipboard.
+                // Static instance persists its session key across calls so we
+                // re-authenticate only when the session actually expires.
+                static QRZLookup qrz;
+                qrz.LookupAndCopyGrid(callsignCopy);
             }).detach();
     }
 

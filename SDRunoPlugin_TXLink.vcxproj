@@ -137,6 +137,7 @@
     <ClCompile Include="HeartBeat.cpp" />
     <ClCompile Include="MessageBox.cpp" />
     <ClCompile Include="NamedPipeServer.cpp" />
+    <ClCompile Include="QRZ_XML_Lookup.cpp" />
     <ClCompile Include="SDRUnoHelper.cpp" />
     <ClCompile Include="SDRunoPlugin_TXLink.cpp" />
     <ClCompile Include="SDRunoPlugin_TXLinkATUDialog.cpp" />
@@ -165,6 +166,7 @@
     <ClInclude Include="FindWindowTitleRoot.h" />
     <ClInclude Include="Console.h" />
     <ClInclude Include="Heartbeat.h" />
+    <ClInclude Include="QRZ_XML_Lookup.h" />
     <ClInclude Include="RealTimeClock_Utils.h" />
     <ClInclude Include="SDRUnoHelper.h" />
     <ClInclude Include="SDRunoSDK.h" />
