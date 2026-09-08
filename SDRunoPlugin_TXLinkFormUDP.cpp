@@ -99,7 +99,12 @@ void SDRunoPlugin_TXLinkForm::ProcessUDPEvent()
 				FT8Lbl.caption("<bold=true size=10>" + DigiTXmodeStr + "</>");
 				FT8txOnLbl.bgcolor(nana::colors::red);
 
-				SetupDataMode();
+				if (CurrentTXfreq == CurrentWSJTXfreq)		//make sure freq is set
+				{
+					string str = "{F" + to_string((int64_t) CurrentTXfreq) + "}";
+					//is_sent = Serial.WriteSerialPort(str);
+				}
+				SetupDataMode();		//new freq sent here
 			}
 
 			if (evt.haltTXevent) {
