@@ -373,7 +373,7 @@ EncodeResult EncodeMessage(const std::string& WSJTX_TXmodeStr, const std::string
         requiredLength = 105;
     }
     else {
-        return { TxNoSymbols, "Invalid WSJTX_TXmodeStr" };
+        return { TxNoSymbols, "Invalid " + WSJTX_TXmodeStr };
     }
 
     if (strMessage == "TUNE") {

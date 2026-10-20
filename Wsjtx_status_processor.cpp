@@ -35,6 +35,9 @@ std::string WSJTX_StatusProcessor::ProcessStatus(
     std::cout << "\n" << get_millis()
         << "NewStatusPacket: DefaultTXMessage = \""
         << StatusPacket.DefaultTXMessage << "\"" << std::endl;
+    std::cout <<  get_millis()
+        << "NewStatusPacket: Mode:" << StatusPacket.Mode << ", txSymbols = \""
+        << StatusPacket.txSymbols << "\"" << std::endl;
 
     if (msg.empty()) { msg = "CQ G4AHN IO91"; }   // default if empty
 
