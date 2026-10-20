@@ -46,7 +46,38 @@ void SDRunoPlugin_TXLinkForm::ProcessUDPEvent()
 
 		bool is_sent = false;
 		long TXtimeToEnd = 0;
-		if (Serial.Connected())
+		if (Serial.Connected() && evt.txModeStr == "JTTY")
+		{
+			// JTTY: no T/R periods. evt.jttyCmd carries "{J<hex>}{X1}" for each new
+			// message (or "{X0}" on abort); the Nano runs each message to its end itself.
+			if (evt.newFrequency > 0)
+			{
+				CurrentWSJTXfreq = static_cast<double>(evt.newFrequency);
+				SetupDataMode();
+			}
+			is_sent = true;
+			if (evt.dataChanged)
+			{
+				is_sent = Serial.WriteSerialPort("{M16}{Y" + to_string(evt.txDF) + "}");	//mode & TX offset before any {J}
+			}
+			if (!evt.jttyCmd.empty())
+			{
+				is_sent = Serial.WriteSerialPort(evt.jttyCmd) && is_sent;
+			}
+			if (evt.txFlag)
+			{
+				DigiTXmodeStr = evt.txModeStr;
+				FT8Lbl.format(true);
+				FT8Lbl.caption("<bold=true size=10>" + DigiTXmodeStr + "</>");
+				FT8txOnLbl.bgcolor(nana::colors::red);
+				SetupDataMode();
+			}
+			else
+			{
+				FT8txOnLbl.bgcolor(nana::colors::light_grey);
+			}
+		}
+		else if (Serial.Connected())
 		{
 			//always update freq when changed in wsjtx
 			if (evt.newFrequency > 0)			//user changed band / mode in wsjtx
@@ -180,6 +211,7 @@ void SDRunoPlugin_TXLinkForm::SetupDataMode()
 		int bndw = FilterBandwidthFT8;
 		if (DigiTXmodeStr == "FT4") { bndw = FilterBandwidthFT4; }
 		if (DigiTXmodeStr == "FT2") { bndw = FilterBandwidthFT2; }
+		if (DigiTXmodeStr == "JTTY") { bndw = FilterBandwidthFT4; }
 		m_controller.SetFilterBandwidth(0, bndw);
 		m_txModeChangePending = false;
 	}

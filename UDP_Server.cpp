@@ -27,7 +27,7 @@ using namespace std;
 #pragma warning(disable:4996) 
 
 //UDP port defaults for wsjtx
-#define BUFLEN 512
+#define BUFLEN 8192          // JTTY Status can be ~2 kB (up to 944 symbols); was 512
 #define PORT 2237
 #define SERVER "127.0.0.1"  // or "localhost" - ip address of UDP server
 
@@ -207,6 +207,12 @@ void UDP_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _pa
                 g_statusProcessor.PreemptiveTXCheck(UDPStatusQueue, RTCdelay);   // preemptive TX check during wait
 
                 continue; // Go back to the top of the loop to check UDPExitRequest
+            }
+            else if (lastError == WSAEMSGSIZE)
+            {
+                // datagram larger than BUFLEN - truncated by Winsock, discard it but keep running
+                std::cout << std::endl << get_millis() << "UDP datagram too large for buffer (" << BUFLEN << " bytes) - ignored" << std::endl;
+                continue;
             }
             else
             {

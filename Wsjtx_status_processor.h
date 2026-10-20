@@ -8,7 +8,7 @@
 #include "MessageQueue.h"
 
 // Forward declarations - full definitions only needed in the .cpp
-struct WSJTX_Status;
+class WSJTX_Status;     // (declared as class in WSJTX_Packet.h)
 
 //---------------------------------------------------------------------------
 // WSJTX_StatusProcessor
@@ -51,6 +51,13 @@ public:
     const std::string& GetTXmodeStr() const { return WSJTX_TXmodeStr; }
 
 private:
+    // JTTY: turns the WS TxSymbols field into a one-shot Nano command
+    // ("{J<hex>}{X1}" for a new message id, "{X0}" for JABORT, "" otherwise).
+    // Updates lastJttyId and strDecodeMsg. See JTTY_UDP.h for the field format.
+    std::string ProcessJttyTxSymbols(const std::string& txSymbols,
+        bool transmitting,
+        const std::string& msg);
+
     // -----------------------------------------------------------------------
     // UDP-thread-local working/decision state.
     // These never cross threads - they exist purely to track context between
@@ -67,6 +74,12 @@ private:
 
     // Frequency carry-forward, for detecting changes
     uint64_t curFrequency = 0;
+
+    // JTTY: id of the last message sent to the Nano (0 = none this transmission)
+    uint64_t lastJttyId = 0;
+
+    // JTTY: Tune in progress (WS Status Transmitting with Tx message "TUNE")
+    bool jttyTuning = false;
 
     // TX-slot decision state
     bool msgChanged = false;

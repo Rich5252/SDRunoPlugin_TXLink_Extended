@@ -33,6 +33,8 @@ struct UDPStatusEvent
     bool        txModeChanged = false; // true if WSJT-X mode (FT8/FT4/FT2) changed since the last pushed event
     std::string newDXcall;             // non-empty if this is a new DX call (triggers QRZ lookup)
     std::string decodeMsg;             // strDecodeMsg - current decode/status text for display
+    std::string jttyCmd;               // JTTY only, one-shot: Nano command to send now -
+                                       //   "{J<hex>}{X1}" for a new message, "{X0}" on abort, else empty
 
     // --- Consumed by Form button-action handlers (DX info display) ---
     std::string dxCall;                // current DX call being worked

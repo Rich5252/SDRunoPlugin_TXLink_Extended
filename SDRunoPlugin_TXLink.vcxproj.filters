@@ -39,6 +39,9 @@
     <ClCompile Include="UDP_Server.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="JTTY_UDP.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="SDRunoPlugin_TXLinkATUDialog.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -144,6 +147,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="MessageQueue.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="JTTY_UDP.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="FindWindowTitleRoot.h">

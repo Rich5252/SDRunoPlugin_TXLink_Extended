@@ -160,6 +160,7 @@
     <ClCompile Include="TunerServer.cpp" />
     <ClCompile Include="UDP_Server.cpp" />
     <ClCompile Include="Wsjtx_status_processor.cpp" />
+    <ClCompile Include="JTTY_UDP.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DXspiderClient.h" />
@@ -189,6 +190,7 @@
     <ClInclude Include="TunerServer.h" />
     <ClInclude Include="UDP_Server.h" />
     <ClInclude Include="Wsjtx_status_processor.h" />
+    <ClInclude Include="JTTY_UDP.h" />
     <ClInclude Include="WSJTX_Packet.h" />
   </ItemGroup>
   <ItemGroup>

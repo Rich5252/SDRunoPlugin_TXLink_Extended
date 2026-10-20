@@ -10,6 +10,7 @@
 #include "RealTimeClock_Utils.h"
 #include "MessageBox.h"         // get_millis()
 #include "QRZ_XML_Lookup.h"
+#include "JTTY_UDP.h"
 
 using namespace std;
 
@@ -28,6 +29,10 @@ std::string WSJTX_StatusProcessor::ProcessStatus(
 {
     WSJTX_Status StatusPacket(pkt, index);
     StatusPacket.Decode();
+
+    // JTTY has no T/R slots and WS supplies the tones directly in txSymbols,
+    // so EncodeMessage, the slot/preemptive logic and the halt rule are skipped.
+    const bool isJtty = (StatusPacket.Mode == "JTTY");
 
     std::string msg = StatusPacket.DefaultTXMessage;
     msg = removeTrailingSpaces(msg);
@@ -62,7 +67,7 @@ std::string WSJTX_StatusProcessor::ProcessStatus(
 
     // --- TX flag and DF ---
     bool haltTXevent = false;
-    if (TXflgLocal && !StatusPacket.Transmitting && !StatusPacket.TxEnabled) { haltTXevent = true; }
+    if (!isJtty && TXflgLocal && !StatusPacket.Transmitting && !StatusPacket.TxEnabled) { haltTXevent = true; }
     bool txFlag = StatusPacket.Transmitting;
     if (TXDFLocal != StatusPacket.TxDF) { dataChanged = true; }
     TXDFLocal = StatusPacket.TxDF;
@@ -70,7 +75,27 @@ std::string WSJTX_StatusProcessor::ProcessStatus(
     // --- Message/symbol encoding ---
     msgChanged = false;
     std::string txSymbols = TXsymbolsLocal;   // carry forward unless changed
-    if (LastTXmsg.empty() || LastTXmsg != msg)
+    std::string jttyCmd;
+    if (isJtty)
+    {
+        // Tune: WS sends Transmitting with Tx message "TUNE" and no symbols.
+        // Start a steady carrier on the Nano ({JT}) and stop it ({X0}) when
+        // WS stops transmitting (Tune button off, Halt Tx, or WS tune timeout).
+        bool tuneNow = StatusPacket.Transmitting && msg == "TUNE";
+        if (tuneNow != jttyTuning)
+        {
+            jttyTuning = tuneNow;
+            jttyCmd = tuneNow ? "{JT}{X1}" : "{X0}";
+            if (tuneNow) { strDecodeMsg = "TUNE"; }
+            lastJttyId = 0;
+            std::cout << get_millis() << "JTTY: Tune " << (tuneNow ? "ON -> Nano {JT}{X1}" : "OFF -> Nano {X0}") << std::endl;
+        }
+        else if (!tuneNow)
+        {
+            jttyCmd = ProcessJttyTxSymbols(StatusPacket.txSymbols, StatusPacket.Transmitting, msg);
+        }
+    }
+    else if (LastTXmsg.empty() || LastTXmsg != msg)
     {
         EncodeResult encoded = EncodeMessage(WSJTX_TXmodeStr, msg);
         txSymbols = encoded.symbols;
@@ -79,8 +104,11 @@ std::string WSJTX_StatusProcessor::ProcessStatus(
         msgChanged = true;
     }
 
-    LastTXmsg = msg;
-    TXsymbolsLocal = txSymbols;
+    if (!isJtty)                    // keep the FT8/FT4/FT2 message state untouched while in JTTY
+    {
+        LastTXmsg = msg;
+        TXsymbolsLocal = txSymbols;
+    }
     TXflgLocal = txFlag;
 
     // --- DX call / grid / report ---
@@ -100,7 +128,7 @@ std::string WSJTX_StatusProcessor::ProcessStatus(
     int DTC = static_cast<int>(ms % slotPeriod);
     int SlotTimeLeft = slotPeriod - DTC;
 
-    TXenabled = StatusPacket.TxEnabled;
+    TXenabled = isJtty ? false : StatusPacket.TxEnabled;     // no slot logic for JTTY
     if (TXenabled)
     {
         // Abort preemptive TX if it started in the wrong slot.
@@ -159,6 +187,7 @@ std::string WSJTX_StatusProcessor::ProcessStatus(
     TXmodeChange = false;   // one-shot: consumed into this event
     evt.newDXcall = newDXcall;
     evt.decodeMsg = strDecodeMsg;
+    evt.jttyCmd = jttyCmd;
     evt.dxCall = DXcallLocal;
     evt.dxGrid = DXgridLocal;
     evt.report = strReportLocal;
@@ -178,6 +207,7 @@ std::string WSJTX_StatusProcessor::ProcessStatus(
     lastFullEvent.txModeChanged = false;
     lastFullEvent.dataChanged = false;
     lastFullEvent.newFrequency = 0;
+    lastFullEvent.jttyCmd = "";
 
     // Call PreemptiveTXCheck AFTER the event is built and pushed, so it
     // starts from this packet's fully up-to-date lastFullEvent rather than
@@ -223,6 +253,7 @@ void WSJTX_StatusProcessor::PreemptiveTXCheck(
     ThreadSafeMessageQueue<UDPStatusEvent>& queue,
     int rtcDelay)
 {
+    if (WSJTX_TXmodeStr == "JTTY") { return; }   // JTTY has no T/R slots
     if (rtcDelay <= 50) { return; }   // minimal delay - let wsjtx control
 
     uint64_t ms = GetCurrentTimeMs();
@@ -258,5 +289,46 @@ void WSJTX_StatusProcessor::PreemptiveTXCheck(
         evt.txModeStr = WSJTX_TXmodeStr;
         evt.decodeMsg = strDecodeMsg;
         queue.push(evt);
+    }
+}
+
+
+//-----------------------------------------------------------------------------
+// WSJTX_StatusProcessor::ProcessJttyTxSymbols
+//
+// JTTY: WS sends one Status per accepted message with txSymbols = "J<id> t t t..."
+// (repeated by later Status packets), "JABORT" on abort, and "" otherwise.
+// Returns the Nano command for this packet, or "" if nothing is to be sent.
+//-----------------------------------------------------------------------------
+std::string WSJTX_StatusProcessor::ProcessJttyTxSymbols(
+    const std::string& txSymbols,
+    bool transmitting,
+    const std::string& msg)
+{
+    Jtty::TxSymbols t = Jtty::ParseTxSymbols(txSymbols);
+    switch (t.kind)
+    {
+    case Jtty::Kind::Message:
+        if (t.id == lastJttyId) { return ""; }          // repeat of a message already sent
+        lastJttyId = t.id;
+        strDecodeMsg = msg;
+        msgChanged = true;
+        std::cout << get_millis() << "JTTY: J" << t.id << " " << t.frames
+            << " frame(s) -> Nano: " << msg << std::endl;
+        return "{J" + t.hex + "}{X1}";                 // {X1} harmless if already transmitting
+
+    case Jtty::Kind::Abort:
+        lastJttyId = 0;
+        std::cout << get_millis() << "JTTY: ABORT -> Nano {X0}" << std::endl;
+        return "{X0}";
+
+    case Jtty::Kind::Error:
+        std::cout << get_millis() << "JTTY: txSymbols error: " << t.error << std::endl;
+        return "";
+
+    case Jtty::Kind::None:
+    default:
+        if (!transmitting) { lastJttyId = 0; }          // TX over (WS ids restart if WS restarts)
+        return "";
     }
 }
