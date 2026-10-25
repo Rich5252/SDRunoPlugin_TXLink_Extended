@@ -227,6 +227,11 @@ void SDRunoPlugin_TXLinkForm::ProcessMessageQueue()
 				message = ProcessRTTYcommand(rttyCmdText);
 			}
 
+			if (message.rfind("JTTY:", 0) == 0) { // Command starts with "RTTY:"
+				std::string jttyCmdText = message.substr(5); // Extract text after "RTTY:"
+				message = ProcessJTTYcommand(jttyCmdText);
+			}
+
 			// Send serial message string to Arduino
 			_SendSerialMsg(message);
 		}
@@ -248,6 +253,21 @@ std::string SDRunoPlugin_TXLinkForm::ProcessRTTYcommand(std::string rttyCmdText)
 	}
 
 	return rttyCmdText;
+}
+
+std::string SDRunoPlugin_TXLinkForm::ProcessJTTYcommand(std::string jttyCmdText)
+{
+	// Process command message string from JTTY (RTTY) server.
+	// eg {X0}
+
+	if (jttyCmdText.rfind("{X0}", 0) >= 0) {			//used for abort from JTTY app
+		DigiTXmodeStr = "JTTY";							//only space for 3 chars in Lbl
+		FT8Lbl.format(true);
+		FT8Lbl.caption("<bold=true size=10>" + DigiTXmodeStr + "</>");    // FT8Lbl.caption(WSJTX_TXmodeStr);		//FT8Lbl.caption(< bold size = 12>" + "FT8" + " < / > ");
+		FT8txOnLbl.bgcolor(nana::colors::light_grey);
+	}
+
+	return jttyCmdText;
 }
 
 bool SDRunoPlugin_TXLinkForm::SendSerialMsg(const std::string& msg)

@@ -106,6 +106,7 @@ private:
 	void ProcessUDPEvent();
 	void ReTransmit();
 	std::string ProcessRTTYcommand(std::string rttyCmdText);
+	std::string ProcessJTTYcommand(std::string jttyCmdText);
 
 	bool DiagnosticTX = false;
 

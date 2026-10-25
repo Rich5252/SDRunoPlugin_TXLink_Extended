@@ -65,6 +65,9 @@ void RTTY_Server_Loop(IUnoPluginController& _controller, SDRunoPlugin_TXLink& _p
 						_parent.m_Ui->m_form->SendSerialMsg(message);
 						//RTTYpipe.writeMessage("RTTY:SENT");
 					}
+					else if (message.rfind("JTTY:", 0) == 0) {				//JTTY messages
+						_parent.m_Ui->m_form->SendSerialMsg(message);		//process in Form
+					}
 					else {
 						std::cout << get_millis() << " RTTY Server Unknown command received: " << message << std::endl;
 						//RTTYpipe.writeMessage("ERROR:UNKNOWN_COMMAND");
