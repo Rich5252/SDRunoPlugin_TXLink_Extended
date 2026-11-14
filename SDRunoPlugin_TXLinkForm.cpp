@@ -107,6 +107,12 @@ void SDRunoPlugin_TXLinkForm::OnTimer()
 
 }
 
+void SDRunoPlugin_TXLinkForm::ShowTXmeter(bool on)
+{
+	if (on) { FT8msgLbl.hide(); TXmeter.Reset(); TXmeter.Show(true); }
+	else { TXmeter.Show(false); FT8msgLbl.show(); }
+}
+
 
 string SDRunoPlugin_TXLinkForm::GetCOM()
 {

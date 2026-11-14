@@ -20,6 +20,8 @@
 #include "UDPStatusEvent.h"   // struct UDPStatusEvent only - deliberately NOT UDP_Server.h,
 								// which would create a circular include via SDRunoPlugin_TXLink.h
 
+#include "LevelMeter.h"
+
 
 struct TunerFreqRequest { int32_t freqIncr; };
 
@@ -107,6 +109,7 @@ private:
 	void ReTransmit();
 	std::string ProcessRTTYcommand(std::string rttyCmdText);
 	std::string ProcessJTTYcommand(std::string jttyCmdText);
+	void ShowTXmeter(bool on);
 
 	bool DiagnosticTX = false;
 
@@ -238,6 +241,7 @@ private:
 	nana::label FT8Lbl{ *this, nana::rectangle(20, 126, 25, 20) };
 	nana::label FT8txOnLbl{ *this, nana::rectangle(50, 128, 10, 10) };
 	nana::label FT8msgLbl{ *this, nana::rectangle(70, 126, 210, 20) };
+	LevelMeter TXmeter{ *this, nana::rectangle(70, 126, 185, 20), false };
 	nana::button DXspotBtn{ *this, nana::rectangle(259, 126, 20, 20) };
 	nana::textbox TXlevelTb{ *this, nana::rectangle(110, 149, 40, 20) };
 	nana::label TXlevelLbl{ *this, nana::rectangle(18, 152, 100, 20) };

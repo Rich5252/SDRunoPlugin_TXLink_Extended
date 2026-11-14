@@ -167,6 +167,7 @@
     <ClInclude Include="FindWindowTitleRoot.h" />
     <ClInclude Include="Console.h" />
     <ClInclude Include="Heartbeat.h" />
+    <ClInclude Include="LevelMeter.h" />
     <ClInclude Include="QRZ_XML_Lookup.h" />
     <ClInclude Include="RealTimeClock_Utils.h" />
     <ClInclude Include="SDRUnoHelper.h" />

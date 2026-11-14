@@ -508,6 +508,13 @@ void SDRunoPlugin_TXLinkForm::Setup()
 	TXlevelTb.caption(strTXlevel);		//this triggers event and opens/resets port on startup
 	PAlevelTb.caption(strPAlevel);		//this triggers event and opens/resets port on startup
 
+	TXmeter.Range(-60, 3);
+	TXmeter.Segments(32);
+	TXmeter.Caption("dB");      // optional
+	//TXmeter.ShowScale(false);		//full height bar, no scale
+	ShowTXmeter(true);
+
+
 	m_timer.interval(std::chrono::milliseconds(5));			//this is just the time between finishing one timer event and starting the next, 
 	//  not the actual timer interval
 // this next call sets the code to be executed after every interval
@@ -537,3 +544,4 @@ void SDRunoPlugin_TXLinkForm::Setup()
 	
 	//Note initial values sent to TXlink Arduino in ProcessIncomingSerial() which detects startup message from it
 }
+
