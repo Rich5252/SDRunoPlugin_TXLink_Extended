@@ -258,6 +258,9 @@ void SimpleSerial::ReOpenPort(const std::string com_port, DWORD COM_BAUD_RATE, b
 {
 	ClearComm();
 	CloseSerialPort();
+	if (com_port == "\\\\.\\COM14") { COM_BAUD_RATE = 921600; }		//ESP32
+	else { COM_BAUD_RATE = 115200; }
+
 	if (!bAsync)
 	{
 		CreateSerialPort(com_port, COM_BAUD_RATE);
@@ -273,6 +276,8 @@ void SimpleSerial::CreateSerialPort(const std::string com_port, DWORD COM_BAUD_R
 {
 	connected_ = false;
 	com_port_ = com_port; // Store the com_port for later use
+	if (com_port == "\\\\.\\COM14") { COM_BAUD_RATE = 921600; }		//ESP32
+	else { COM_BAUD_RATE = 115200; }
 
 	Serial_HANDLE = CreateFileA(com_port.c_str(),
 		GENERIC_READ | GENERIC_WRITE,
@@ -333,6 +338,8 @@ void SimpleSerial::CreateSerialPort(const std::string com_port, DWORD COM_BAUD_R
 void SimpleSerial::CreateSerialPortAsync(const std::string com_port, DWORD COM_BAUD_RATE)
 {
 	connected_ = false;
+	if (com_port == "\\\\.\\COM14") { COM_BAUD_RATE = 921600; }		//ESP32
+	else { COM_BAUD_RATE = 115200; }
 
 	Serial_HANDLE = CreateFileA(
 		com_port.c_str(),
