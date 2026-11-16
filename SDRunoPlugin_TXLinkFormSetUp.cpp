@@ -289,6 +289,11 @@ void SDRunoPlugin_TXLinkForm::Setup()
 		strCOM = COMportPrefix + strCOM;
 		Serial.ReOpenPort(strCOM, COM_BAUD_RATE, false);
 		});
+	COMportTb.events().dbl_click([&] {
+		bDiagnosticPrintAll = true;
+		strDiagnostic = "";
+		_SendSerialMsg("{D}Z");				//send Z to ESP32 to request a reboot and re-send all settings
+		});
 
 	string strCOM = LoadCOM();
 	if (strCOM == "")
@@ -370,7 +375,7 @@ void SDRunoPlugin_TXLinkForm::Setup()
 			}
 			SetStandbyMode(StandbyMode);
 		});
-	SetStandbyMode(StandbyMode);
+	//SetStandbyMode(StandbyMode);
 
 	UNOhwnd = FindTargetWindow(L"SDRuno Main 0", true);							//find UNOhwnd for main SDRuno window
 

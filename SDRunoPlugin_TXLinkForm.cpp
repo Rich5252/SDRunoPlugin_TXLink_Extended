@@ -85,6 +85,15 @@ void SDRunoPlugin_TXLinkForm::OnTimer()
 		return;										//skip the rest of the code in this elapse function if UnloadInProgress
 	}
 
+	if (!m_bootCmdSent && Serial.Connected())
+	{
+		m_bootCmdSent = true;						//one-shot, even if the write fails
+		strDiagnostic = "";							//clear any previous messages
+		bDiagnosticPrintAll = true;					//start printing all serial messages to console
+		_SendSerialMsg("Z");						//ESP reboots, then sends {~TX}
+		std::cout << get_millis() << " OnTimer - ESP reboot command sent" << std::endl;
+	}
+
 	TRY_STEP("ProcessUDPEvent", ProcessUDPEvent());		//now drains UDPStatusQueue internally; cheap no-op if empty
 
 	TRY_STEP("CheckWindowState", CheckWindowState());					//check if main SDRuno window minimized or restored

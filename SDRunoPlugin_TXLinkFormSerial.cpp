@@ -41,6 +41,7 @@ void SDRunoPlugin_TXLinkForm::ProcessIncomingSerial()
 	string NextChar = "";
 	string NewMsg = "";
 	string LastMsg = "";
+	bool bValidCommandStartReceived = false;
 	static bool VRX0mute = false;
 	static bool VRX1mute = true;
 
@@ -61,14 +62,19 @@ void SDRunoPlugin_TXLinkForm::ProcessIncomingSerial()
 		}
 
 		NextChar = Serial.ReadSerialPortChar();
+
+		if (bDiagnosticPrintAll)	strDiagnostic = strDiagnostic + NextChar;		//while rebooting
+
 		//valid read
 		if (NextChar == "{")
 		{
 			NewMsg = "";
 			LastMsg = "";
+			bValidCommandStartReceived = true;
 		}
 		else if (NextChar == "}")
 		{
+			bValidCommandStartReceived = false;		//end of command
 			//execute compiled message
 			if (NewMsg == "")					//null command or an error
 			{
@@ -76,6 +82,19 @@ void SDRunoPlugin_TXLinkForm::ProcessIncomingSerial()
 			}
 			else if (NewMsg == "~TX")					//init message from TXlink Arduino
 			{
+				bDiagnosticPrintAll = false;		//end of re-boot
+				std::cout << get_millis() << "ESP32 reboot messages: " << strDiagnostic << std::endl;
+				std::cout << get_millis() << "ESP32 ~TX received - reboot complete" << std::endl;
+
+				if (!Serial.Connected())
+				{
+					//attempt to restart COM port
+					string strCOM = COMportTb.caption();
+					strCOM = COMportPrefix + strCOM;
+					Serial.ReOpenPort(strCOM, COM_BAUD_RATE, false);
+					std::this_thread::sleep_for(std::chrono::milliseconds(250));		//wait for Arduino to restart
+				}
+
 				//so send all the initial data to TXlink Arduino
 				if (Serial.Connected()) {
 					//force a freq update here as it can be 20-30seconds after DLL load before TXlink Arduino resets and sends ~TX
@@ -94,6 +113,8 @@ void SDRunoPlugin_TXLinkForm::ProcessIncomingSerial()
 				SendFT8txDelay(GetValidFT8txDelay());
 				SendTempLimit(GetValidTempLimit());
 				SetMuteTX(true);					//enable vrx1 mute as default
+
+
 
 			}
 			else if (NewMsg.substr(0, 1) == "M" && DigiTXmodeStr != "TTY")
@@ -175,7 +196,7 @@ void SDRunoPlugin_TXLinkForm::ProcessIncomingSerial()
 			LastMsg = NewMsg;
 			NewMsg = "";		//message completed
 		}
-		else
+		else if (bValidCommandStartReceived)		//only add chars to message if a valid start char has been received
 		{
 			NewMsg.append(NextChar);
 			if (NewMsg.length() > MAX_MSG_LEN)

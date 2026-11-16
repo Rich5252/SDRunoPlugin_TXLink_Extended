@@ -73,6 +73,9 @@ public:
 	bool TrackFreq = true;
 	eSplitMode SplitMode = SplitNone;
 	bool StandbyMode = true;
+	bool bDiagnosticPrintAll = false;
+	string strDiagnostic = "";
+	bool m_bootCmdSent = false;
 
 	string DigiTXmodeStr = "FT8";
 
