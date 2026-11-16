@@ -206,6 +206,8 @@ void SDRunoPlugin_TXLinkForm::SetupDataMode()
 	m_parent._updateRX_AnnoEntry("FTX", "", (int64_t)CurrentRXfreq);
 	m_controller.SetDemodulatorType(0, m_controller.DemodulatorUSB);
 	FixFreqBtn.caption("UnSplit");
+	cbModeDig.check(true);
+	ModeRbChanged(0);
 	if (m_txModeChangePending)
 	{
 		int bndw = FilterBandwidthFT8;

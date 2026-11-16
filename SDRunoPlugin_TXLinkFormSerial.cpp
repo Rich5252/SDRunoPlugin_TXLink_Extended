@@ -161,6 +161,17 @@ void SDRunoPlugin_TXLinkForm::ProcessIncomingSerial()
 				StandbyMode = true;
 				TXtempLbl.fgcolor(nana::colors::red);
 			}
+			else if (NewMsg.substr(0, 1) == "A")				//level meter reading
+			{
+				
+				const char* start = NewMsg.c_str() + 1;
+				char* end = nullptr;
+				double levelDb = std::strtod(start, &end);
+				if (end != start)								//ignore if no number followed the 'A'
+				{
+					TXmeter.SetLevel(levelDb);
+				}
+			}
 			LastMsg = NewMsg;
 			NewMsg = "";		//message completed
 		}
@@ -292,7 +303,7 @@ bool SDRunoPlugin_TXLinkForm::_SendSerialMsg(string Msg)
 //Load COM port
 string SDRunoPlugin_TXLinkForm::LoadCOM()
 {
-	std::string tmp = "COM5";
+	std::string tmp = "COM14";
 	m_controller.GetConfigurationKey("TXLink.COM", tmp);
 
 	if (tmp.empty())

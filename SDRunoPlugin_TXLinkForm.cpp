@@ -105,6 +105,8 @@ void SDRunoPlugin_TXLinkForm::OnTimer()
 	// look for incoming serial and UDP on timer event
 	TRY_STEP("ProcessIncomingSerial", ProcessIncomingSerial());
 
+	TXmeter.Tick();
+
 }
 
 void SDRunoPlugin_TXLinkForm::ShowTXmeter(bool on)
@@ -112,6 +114,42 @@ void SDRunoPlugin_TXLinkForm::ShowTXmeter(bool on)
 	if (on) { FT8msgLbl.hide(); TXmeter.Reset(); TXmeter.Show(true); }
 	else { TXmeter.Show(false); FT8msgLbl.show(); }
 }
+
+void SDRunoPlugin_TXLinkForm::ModeRbChanged(std::size_t index)
+{
+	//example of how to use the radio group to determine which mode is selected
+	//std::size_t sel = ModeGroup.checked();     // 0..3, or nana::radio_group::npos if none
+
+	ShowTXmeter(index >= 2);               // e.g. meter on for USB/2T
+
+	string msg = "";
+	switch (index)
+	{
+		case 0: msg = ""; break;											//digi
+		case 1:																//CW
+			msg = "{M256}";
+			m_controller.SetDemodulatorType(0, m_controller.DemodulatorCW);
+			m_controller.SetFilterBandwidth(0, 500);
+			break;		// CW mode
+
+		case 2:	msg = CurrentTXfreq < 10e6 ? "{M64}" : "{M32}"; break; 	// SSB mode
+
+		case 3: msg = "{M128}"; break;										// 2T mode
+	}
+	if (msg != "")
+	{
+		_SendSerialMsg(msg);
+	}
+
+	//check if we were in digi, ie SplitMode = SplitFT8, and if so reset to SplitNone
+	if (index > 0 && SplitMode == SplitFT8) FixFreqBtnClicked();		//reset to normal split mode
+
+	if (index > 1) {
+		CurrentTXfreq >= 10e6 ? m_controller.SetDemodulatorType(0, m_controller.DemodulatorUSB) : m_controller.SetDemodulatorType(0, m_controller.DemodulatorLSB);
+		m_controller.SetFilterBandwidth(0, 3000);
+	}
+}
+
 
 
 string SDRunoPlugin_TXLinkForm::GetCOM()
@@ -467,7 +505,7 @@ double SDRunoPlugin_TXLinkForm::strToDouble(string str)
 	return d;
 }
 
-void SDRunoPlugin_TXLinkForm::FixFreqBtnClicked()
+void SDRunoPlugin_TXLinkForm::FixFreqBtnClicked()		//ie split button
 {
 	// sets split mode back to normal from FT8 and toggles normal Split
 	if (SplitMode != SplitNone)
@@ -483,8 +521,12 @@ void SDRunoPlugin_TXLinkForm::FixFreqBtnClicked()
 		FT8Lbl.fgcolor(nana::colors::white);
 		FT8Lbl.transparent(true);
 		freqTb.fgcolor(nana::colors::black);
-		m_controller.SetDemodulatorType(0, m_controller.DemodulatorCW);
-		m_controller.SetFilterBandwidth(0, FilterBandwidthCW);
+		if (cbModeDig.checked()) {		//Force out of Digi mode to CW
+			m_controller.SetDemodulatorType(0, m_controller.DemodulatorCW);
+			m_controller.SetFilterBandwidth(0, FilterBandwidthCW);
+			cbModeCW.check(true);
+			ModeRbChanged(1);
+		}
 	}
 	else
 	{
@@ -499,7 +541,7 @@ void SDRunoPlugin_TXLinkForm::FixFreqBtnClicked()
 		FT8Lbl.fgcolor(nana::colors::white);
 		FT8Lbl.transparent(true);
 	}
-	FixFreqButtonClicked();
+	FixFreqButtonHasBeenClicked();		//set the button state in the TX module too
 }
 
 void SDRunoPlugin_TXLinkForm::AtuBtnClicked()
@@ -878,6 +920,24 @@ void SDRunoPlugin_TXLinkForm::SaveLocation()
 
 }
 
+//Load mode
+string SDRunoPlugin_TXLinkForm::LoadMode()
+{
+	std::string tmp = "";
+	m_controller.GetConfigurationKey("TXLink.Mode", tmp);
+	if (tmp.empty())
+	{
+		return "0";
+	}
+	return tmp;
+}
+
+void SDRunoPlugin_TXLinkForm::SaveMode()
+{
+	std::size_t sel = ModeGroup.checked();     // 0..3, or nana::radio_group::npos if none
+	m_controller.SetConfigurationKey("TXLink.Mode", std::to_string(sel));
+}
+
 //Load TXlevel
 string SDRunoPlugin_TXLinkForm::LoadTXlevel()
 {
@@ -1004,7 +1064,7 @@ void SDRunoPlugin_TXLinkForm::SetStandbyModeClicked()
 	SetStandbyMode(StandbyMode);
 }
 
-void SDRunoPlugin_TXLinkForm::FixFreqButtonClicked()
+void SDRunoPlugin_TXLinkForm::FixFreqButtonHasBeenClicked()
 {
 	if (TrackFreq)
 	{
@@ -1024,6 +1084,7 @@ void SDRunoPlugin_TXLinkForm::SaveIniData()
 	SaveOFS(GetOFS());
 	SaveSplitMode();
 	SaveRTCdelay();
+	SaveMode();
 	//*/
 	std::cout << get_millis() << " SDRunoPlugin_TXLinkUi::SaveIniData complete" << std::endl;
 }

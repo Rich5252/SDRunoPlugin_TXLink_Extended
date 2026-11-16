@@ -83,9 +83,9 @@ public:
 	void ProcessTunerFreqChange(int32_t freqIncr);  // Form-thread only
 
 private:
-	const std::string com_port = "\\\\.\\COM5";
+	const std::string com_port = "\\\\.\\COM14";
 	string COMportPrefix = "\\\\.\\";
-	DWORD COM_BAUD_RATE = CBR_115200;
+	DWORD COM_BAUD_RATE = 921600;
 	SimpleSerial Serial;
 
 	//serial and special requests into Form from other threads or processes
@@ -110,6 +110,7 @@ private:
 	std::string ProcessRTTYcommand(std::string rttyCmdText);
 	std::string ProcessJTTYcommand(std::string jttyCmdText);
 	void ShowTXmeter(bool on);
+	void ModeRbChanged(std::size_t index);
 
 	bool DiagnosticTX = false;
 
@@ -172,14 +173,16 @@ private:
 	void	SaveSplitMode();
 	long	millisToEnd();					//calc FT8 millis to end of tx period
 
-	void FixFreqButtonClicked();
+	void FixFreqButtonHasBeenClicked();
 	int LoadX();
 	int LoadY();
 	void SaveLocation();
 	void SaveIniData();
 	string LoadCOM();
+	string LoadMode();
 	string LoadTXlevel();
 	string LoadPAlevel();
+	void SaveMode();
 	void SaveCOM(string strCOM);
 	void SaveTXlevel(string strTXlevel);
 	void SavePAlevel(string strPAlevel);
@@ -228,20 +231,25 @@ private:
 
 	// TODO: Now add your UI controls here
 	nana::label freqTbLbl{ *this, nana::rectangle(20, 38, 65, 20) };
-	nana::label freqTb{ *this, nana::rectangle(98, 35, 105, 22) };
+	nana::label freqTb{ *this, nana::rectangle(90, 35, 105, 22) };
+	nana::textbox COMportTb{ *this, nana::rectangle(205, 35, 50, 20) };
 	nana::button FixFreqBtn{ *this, nana::rectangle(20, 65, 50, 20) };
 	nana::button FixTXupBtn{ *this, nana::rectangle(75, 65,50,20) };
 	nana::button ResetRXFreqBtn{ *this, nana::rectangle(130, 65, 50, 20) };
 	nana::button SwapTxRxBtn{ *this, nana::rectangle(185, 65, 50, 20) };
 	nana::checkbox RITchkbox{ *this, nana::rectangle(240, 61, 50, 20) };
 	nana::checkbox OFSchkbox{ *this, nana::rectangle(240, 75, 50, 20) };
-	nana::textbox COMportTb{ *this, nana::rectangle(20, 95, 50, 20) };
-	nana::button StandbyBtn{ *this, nana::rectangle(110, 95, 80, 20) };
-	nana::checkbox MuteTXchkbox{ *this, nana::rectangle(205, 98, 70, 20) };
+	nana::checkbox cbModeDig{ *this, nana::rectangle(20, 91, 50, 20) };
+	nana::checkbox cbModeCW{ *this, nana::rectangle(75, 91, 50, 20) };
+	nana::checkbox cbModeSSB{ *this, nana::rectangle(20, 105, 50, 20) };
+	nana::checkbox cbMode2T{ *this, nana::rectangle(75, 105, 50, 20) };
+	nana::radio_group ModeGroup;
+	nana::button StandbyBtn{ *this, nana::rectangle(130, 95, 80, 20) };
+	nana::checkbox MuteTXchkbox{ *this, nana::rectangle(215, 98, 70, 20) };
 	nana::label FT8Lbl{ *this, nana::rectangle(20, 126, 25, 20) };
 	nana::label FT8txOnLbl{ *this, nana::rectangle(50, 128, 10, 10) };
 	nana::label FT8msgLbl{ *this, nana::rectangle(70, 126, 210, 20) };
-	LevelMeter TXmeter{ *this, nana::rectangle(70, 126, 185, 20), false };
+	LevelMeter TXmeter{ *this, nana::rectangle(65, 126, 185, 20), false };
 	nana::button DXspotBtn{ *this, nana::rectangle(259, 126, 20, 20) };
 	nana::textbox TXlevelTb{ *this, nana::rectangle(110, 149, 40, 20) };
 	nana::label TXlevelLbl{ *this, nana::rectangle(18, 152, 100, 20) };

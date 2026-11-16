@@ -293,7 +293,7 @@ void SDRunoPlugin_TXLinkForm::Setup()
 	string strCOM = LoadCOM();
 	if (strCOM == "")
 	{
-		strCOM = "COM5";			//default if not in ini file
+		strCOM = "COM14";			//default if not in ini file
 	}
 	// and reset serial
 	COMportTb.caption(strCOM);		//this triggers event and opens/resets port on startup
@@ -338,6 +338,20 @@ void SDRunoPlugin_TXLinkForm::Setup()
 	OFSchkbox.caption("OFS");
 	OFSchkbox.check(LoadOFS() == "true");
 
+	nana::checkbox* modeBoxes[4] = { &cbModeDig, &cbModeCW, &cbModeSSB, &cbMode2T };
+	const char* modeNames[4] = { "DIG", "CW", "SSB", "2T" };
+	for (std::size_t i = 0; i < 4; i++)
+	{
+		modeBoxes[i]->caption(modeNames[i]);
+		modeBoxes[i]->fgcolor(nana::color_rgb(forecolor));
+		modeBoxes[i]->transparent(true);
+		modeBoxes[i]->radio(true);
+		ModeGroup.add(*modeBoxes[i]);
+		modeBoxes[i]->events().click([this, i] { ModeRbChanged(i); });
+	}
+	string strMode = LoadMode();
+	modeBoxes[std::stoi(strMode)]->check(true);
+	ModeRbChanged(std::stoi(strMode));
 
 	StandbyBtn.caption("Set TX on");
 	StandbyBtn.edge_effects(true);
@@ -511,8 +525,12 @@ void SDRunoPlugin_TXLinkForm::Setup()
 	TXmeter.Range(-60, 3);
 	TXmeter.Segments(32);
 	TXmeter.Caption("dB");      // optional
+	TXmeter.Widget().events().click([&]
+		{
+			_SendSerialMsg("#");
+			//std::cout << get_millis() << "LevelMeter clicked" << std::endl;
+		});
 	//TXmeter.ShowScale(false);		//full height bar, no scale
-	ShowTXmeter(true);
 
 
 	m_timer.interval(std::chrono::milliseconds(5));			//this is just the time between finishing one timer event and starting the next, 
