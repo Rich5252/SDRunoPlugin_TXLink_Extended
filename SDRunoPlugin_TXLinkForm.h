@@ -165,6 +165,9 @@ private:
 	void SendFreqCalToTX();
 	double strToDouble(string str);				//with error check
 	void ShowIsSent(bool is_sent);
+	void SwapLevelMeterMode();
+	int LevelMeterMode = 1;						//1=RF, 2=Audio
+	void SetLevelMeterMode();
 
 	string	GetCOM();
 	string	GetTXlevel();

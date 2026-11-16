@@ -527,12 +527,13 @@ void SDRunoPlugin_TXLinkForm::Setup()
 	TXlevelTb.caption(strTXlevel);		//this triggers event and opens/resets port on startup
 	PAlevelTb.caption(strPAlevel);		//this triggers event and opens/resets port on startup
 
-	TXmeter.Range(-60, 3);
-	TXmeter.Segments(32);
-	TXmeter.Caption("dB");      // optional
+	TXmeter.Range(-60, 6);
+	TXmeter.Segments(33);
+	TXmeter.Thresholds(-10, 0);			//yellow & red thresholds
+	TXmeter.Caption("AdB");      // optional
 	TXmeter.Widget().events().click([&]
 		{
-			_SendSerialMsg("#");
+			SwapLevelMeterMode();
 			//std::cout << get_millis() << "LevelMeter clicked" << std::endl;
 		});
 	//TXmeter.ShowScale(false);		//full height bar, no scale

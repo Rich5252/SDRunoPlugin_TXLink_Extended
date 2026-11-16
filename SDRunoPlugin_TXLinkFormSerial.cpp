@@ -113,9 +113,6 @@ void SDRunoPlugin_TXLinkForm::ProcessIncomingSerial()
 				SendFT8txDelay(GetValidFT8txDelay());
 				SendTempLimit(GetValidTempLimit());
 				SetMuteTX(true);					//enable vrx1 mute as default
-
-
-
 			}
 			else if (NewMsg.substr(0, 1) == "M" && DigiTXmodeStr != "TTY")
 			{

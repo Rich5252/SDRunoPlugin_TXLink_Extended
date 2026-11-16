@@ -159,7 +159,17 @@ void SDRunoPlugin_TXLinkForm::ModeRbChanged(std::size_t index)
 	}
 }
 
+void SDRunoPlugin_TXLinkForm::SwapLevelMeterMode()
+{
+	LevelMeterMode = LevelMeterMode == 1 ? 2 : 1;
+	SetLevelMeterMode();
+}
 
+void SDRunoPlugin_TXLinkForm::SetLevelMeterMode()
+{
+	TXmeter.Caption(LevelMeterMode == 1 ? "RdB" : "AdB");
+	_SendSerialMsg(LevelMeterMode == 1 ? "{#1}" : "{#2}");
+}
 
 string SDRunoPlugin_TXLinkForm::GetCOM()
 {
